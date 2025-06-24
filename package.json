@@ -1,0 +1,43 @@
+{
+  "name": "insta-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "fine-tune": "NODE_OPTIONS=\"--loader ts-node/esm\" ts-node --esm scripts/run_finetuning.ts",
+    "list-jobs": "NODE_OPTIONS=\"--loader ts-node/esm\" ts-node --esm scripts/list_jobs.ts"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.59",
+    "@langchain/langgraph": "^0.3.4",
+    "@langchain/langgraph-cli": "^0.0.40",
+    "@langchain/openai": "^0.5.13",
+    "@supabase/supabase-js": "^2.45.6",
+    "axios": "^1.7.9",
+    "dotenv": "^16.5.0",
+    "form-data": "^4.0.3",
+    "googleapis": "^149.0.0",
+    "langchain": "^0.3.27",
+    "next": "15.3.3",
+    "openai": "^5.1.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "undici": "^7.10.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.3",
+    "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5"
+  }
+}

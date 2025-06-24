@@ -1,0 +1,29 @@
+{
+  "participants": [
+    {
+      "name": "Juan Pablo Villar"
+    },
+    {
+      "name": "Luke Davis"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Juan Pablo Villar",
+      "timestamp_ms": 1737474363034,
+      "content": "I need you bro",
+      "share": {
+        "link": "https://instagram.com/stories/lukedavis.ig/3550465249633691689"
+      },
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    }
+  ],
+  "title": "Juan Pablo Villar",
+  "is_still_participant": true,
+  "thread_path": "message_requests/juanpablovillar_1640023637393007",
+  "magic_words": [
+    
+  ],
+  "is_pending": true
+}

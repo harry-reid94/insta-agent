@@ -1,0 +1,349 @@
+'use client';
+
+import { useState, FormEvent, useEffect } from 'react';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  isSpecific?: boolean;
+}
+
+type ConversationStage = 
+  | 'greeting'
+  | 'rapport_building'
+  | 'rapport_follow_up'
+  | 'answering_Q1'
+  | 'answering_Q2'
+  | 'answering_Q3'
+  | 'answering_Q4'
+  | 'qualified'
+  | 'nurture'
+  | 'finished'
+  | 'human_override'
+  | 'booking';
+
+interface ConversationState {
+    stage: ConversationStage;
+    answers: Record<string, string | number>;
+    lastQuestionAsked: string;
+    isQualified?: boolean;
+    currentQuestionId?: string;
+    repromptAttempts: Record<string, number>;
+    location?: string;
+    response: string;
+}
+
+interface ChatResponse {
+  response: string;
+  newState: ConversationState;
+  error?: string;
+}
+
+// Helper to split assistant responses into separate bubbles.
+function splitAssistantResponse(response: string): string[] {
+  // Split on two or more consecutive newlines (optionally with whitespace)
+  return response
+    .split(/\n\s*\n/)
+    .map(seg => seg.trim())
+    .filter(seg => seg.length > 0);
+}
+
+const MessageBubble = ({ content, role, isSpecific }: Message) => {
+  // Split content by newlines and filter out empty strings
+  const messageParts = content.split('\n').filter(part => part.trim().length > 0);
+
+  const bubbleClass = `rounded-lg px-4 py-2 max-w-[80%] ${
+    role === 'user' 
+      ? 'bg-blue-500 text-white ml-auto' 
+      : 'bg-gray-200 text-black mr-auto'
+  }`;
+
+  const multipleVariants = role === 'assistant' && messageParts.length > 1;
+
+  return (
+    <div className={`flex ${role === 'user' ? 'justify-end' : 'justify-start'} flex-col gap-2`}>
+      {multipleVariants ? (
+        <div className={bubbleClass}>
+          {messageParts[0]}
+          {messageParts.length > 1 && (
+            <div className="mt-2 text-xs text-gray-500">
+              {messageParts.length - 1} more variant{messageParts.length > 2 ? 's' : ''}
+            </div>
+          )}
+        </div>
+      ) : (
+        messageParts.map((part, idx) => (
+          <div key={idx} className={bubbleClass}>
+            {part}
+          </div>
+        ))
+      )}
+
+      {isSpecific && role === 'user' && (
+        <div className="text-xs text-yellow-600 italic ml-auto mr-2">
+          One moment while I transfer you to a specialist
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function Chat() {
+  const [chatInitiated, setChatInitiated] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [state, setState] = useState<ConversationState>({
+      stage: 'greeting',
+      answers: {},
+      lastQuestionAsked: '',
+      isQualified: undefined,
+      currentQuestionId: undefined,
+      repromptAttempts: {},
+      location: undefined,
+      response: '',
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (chatInitiated) {
+      const initiateChat = async () => {
+        try {
+          setIsLoading(true);
+          setMessages([]);
+          const initialState: ConversationState = { 
+            stage: 'greeting', 
+            answers: {}, 
+            lastQuestionAsked: '',
+            isQualified: undefined,
+            currentQuestionId: undefined,
+            repromptAttempts: {},
+            location: undefined,
+            response: '',
+          };
+          setState(initialState);
+
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              messages: [], 
+              state: initialState 
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to get initial message');
+          }
+
+          const data: ChatResponse = await response.json();
+          
+          if (!data.response) {
+            throw new Error('No response received');
+          }
+
+          const assistantMessages: Message[] = splitAssistantResponse(data.response).map(seg => ({
+            role: 'assistant',
+            content: seg,
+            isSpecific: false,
+          }));
+          
+          setMessages(assistantMessages);
+          setState(data.newState);
+        } catch (error) {
+          console.error('Error initiating chat:', error);
+          // Set a fallback greeting message if the API fails
+          setMessages([{
+            role: 'assistant',
+            content: "Hey man! What's up?",
+            isSpecific: false
+          }]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      initiateChat();
+    }
+  }, [chatInitiated]);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    try {
+      setIsLoading(true);
+      const userMessage: Message = { 
+        role: 'user', 
+        content: input,
+        isSpecific: false,
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      setInput('');
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          messages: [...messages, userMessage].map(m => ({
+            type: m.role === 'user' ? 'human' : 'ai',
+            content: m.content
+          })), 
+          state 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data: ChatResponse = await response.json();
+      
+      if (!data.response) {
+        throw new Error('No response received');
+      }
+
+      const assistantMessages: Message[] = splitAssistantResponse(data.response).map(seg => ({
+        role: 'assistant',
+        content: seg,
+        isSpecific: false,
+      }));
+      
+      // Update the last user message's isSpecific flag if the state changed to human_override
+      if (data.newState.stage === 'human_override' && messages.length > 0) {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1].isSpecific = true;
+          return [...updated, ...assistantMessages];
+        });
+      } else {
+        setMessages(prev => [...prev, ...assistantMessages]);
+      }
+      
+      setState(data.newState);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Add a fallback error message
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: "Hey man, having some technical issues. Can you try that again?",
+        isSpecific: false
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!chatInitiated) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <button
+          onClick={() => setChatInitiated(true)}
+          className="bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-blue-600 transition-colors"
+        >
+          Start Chat
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-screen max-w-2xl mx-auto">
+      {/* Debug Side Panel */}
+      <div className="fixed top-4 left-4 bg-gray-800 text-gray-100 text-xs rounded-lg shadow-lg p-3 space-y-1 z-50 w-56">
+        <div className="font-semibold text-center underline">Debug</div>
+        <div>Stage: <span className="font-semibold">{state.stage}</span></div>
+        <div>
+          Status:{' '}
+          <span className={`font-semibold ${state.isQualified === true ? 'text-green-400' : state.isQualified === false ? 'text-red-400' : 'text-gray-400'}`}>
+            {state.isQualified === true ? 'Qualified' : state.isQualified === false ? 'Not Qualified' : 'Pending'}
+          </span>
+        </div>
+        <div>Location: <span className="font-semibold">{state.location || 'Not Set'}</span></div>
+        <div>Current Q: <span className="font-semibold">{state.currentQuestionId || 'None'}</span></div>
+        <div>Last Asked: <span className="font-semibold">{state.lastQuestionAsked || 'None'}</span></div>
+        <div>
+          Highly Specific:{' '}
+          <span className={`font-semibold ${messages.some(m => m.isSpecific) ? 'text-yellow-400' : 'text-gray-400'}`}>
+            {messages.some(m => m.isSpecific) ? 'Yes' : 'No'}
+          </span>
+        </div>
+        <div>
+          Human Override:{' '}
+          <span className={`font-semibold ${state.stage === 'human_override' ? 'text-orange-400' : 'text-gray-400'}`}>
+            {state.stage === 'human_override' ? 'Active' : 'No'}
+          </span>
+        </div>
+        <div>
+          Answers:{' '}
+          <div className="pl-2 mt-1 space-y-1">
+            {Object.entries(state.answers).map(([key, value]) => (
+              <div key={key}>
+                <span className="opacity-75">{key}:</span>{' '}
+                <span className="font-semibold">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* System Status Bar */}
+      <div className="p-2 bg-gray-800 text-xs text-gray-300 font-mono flex justify-between items-center">
+        <div>
+          {state.stage === 'human_override' && (
+            <span className="text-orange-400">
+              [system] human_override_process_initiated
+            </span>
+          )}
+          {state.stage === 'booking' && (
+            <span className="text-green-400">
+              [system] booking_process_initiated
+            </span>
+          )}
+        </div>
+        <div>
+          {state.isQualified !== undefined && state.isQualified && (
+            <span className="text-blue-400">
+              [status] lead_qualified=true
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message, index) => (
+          <MessageBubble key={index} {...message} />
+        ))}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-gray-200 text-black rounded-lg px-4 py-2 animate-pulse">
+              Typing...
+            </div>
+          </div>
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="p-4 border-t">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+            className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={isLoading}
+          />
+          <button
+            type="submit"
+            className={`px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold ${
+              isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
+            }`}
+            disabled={isLoading}
+          >
+            Send
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+} 

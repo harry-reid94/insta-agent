@@ -1,0 +1,158 @@
+{
+  "participants": [
+    {
+      "name": "Kacper Sunday"
+    },
+    {
+      "name": "Luke Davis"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Kacper Sunday",
+      "timestamp_ms": 1731250535776,
+      "content": "\u00d8\u00ad\u00d8\u00a7\u00d8\u00b2\u00d8\u00aa \u00d8\u00b1\u00d8\u00b3\u00d8\u00a7\u00d9\u0084\u00d8\u00a9 \u00d8\u00b9\u00d9\u0084\u00d9\u0089 \u00d8\u00a5\u00d8\u00b9\u00d8\u00ac\u00d8\u00a7\u00d8\u00a8",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731248335612,
+      "content": "crush the day",
+      "reactions": [
+        {
+          "reaction": "\u00e2\u009d\u00a4",
+          "actor": "Kacper Sunday",
+          "timestamp": 1731250535
+        }
+      ],
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731248329890,
+      "content": "lets go!",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Kacper Sunday",
+      "timestamp_ms": 1731246011454,
+      "content": "I\u00e2\u0080\u0099ve booked a call at 11pm CET",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731239025788,
+      "content": "Let me know once you\u00e2\u0080\u0099ve booked something in",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731239010416,
+      "content": "https://calendly.com/antony-bullmarketblueprint/bmb-discovery?utm_source=instagram&utm_medium=archie&utm_campaign=antony",
+      "share": {
+        "link": "https://calendly.com/antony-bullmarketblueprint/bmb-discovery?utm_source=instagram&utm_medium=archie&utm_campaign=antony",
+        "share_text": "https://calendly.com/antony-bullmarketblueprint/bmb-discovery?utm_source=instagram&utm_medium=archie&utm_campaign=antony"
+      },
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731238986461,
+      "content": "You\u00e2\u0080\u0099ll receive an official email but just to make things a bit easier I\u00e2\u0080\u0099ll also drop a link to his calendar here",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731238970965,
+      "content": "I just reviewed your application with the team and we're going to push you through to the next stage of the process which is an introductory call with my C.O.O Antony",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731238968014,
+      "content": "Hey brother",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Kacper Sunday",
+      "timestamp_ms": 1731228440236,
+      "content": "Applied \u00e2\u009c\u0085",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731187469720,
+      "content": "If you get it in soon I'll be able to review it before the doors shut to BMB tomorrow",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731187435260,
+      "content": "Awesome bro",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Kacper Sunday",
+      "timestamp_ms": 1731180398813,
+      "content": "Will apply soon",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Kacper Sunday",
+      "timestamp_ms": 1731180395294,
+      "content": "I see it in the bio ;)",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731180125752,
+      "content": "want me to shoot you over the application link?",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Luke Davis",
+      "timestamp_ms": 1731180110261,
+      "content": "yo bro",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Kacper Sunday",
+      "timestamp_ms": 1731179833041,
+      "content": "\u00f0\u009f\u00ab\u00a1",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "sender_name": "Kacper Sunday",
+      "timestamp_ms": 1731179826208,
+      "content": "BMB",
+      "share": {
+        "link": "https://instagram.com/stories/lukedavis.ig/3497683651406699182"
+      },
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    }
+  ],
+  "title": "\u00e2\u0080\u008f\u00e2\u0080\u008eKacper Sunday\u00e2\u0080\u008e\u00e2\u0080\u008f",
+  "is_still_participant": true,
+  "thread_path": "inbox/kacpersunday_1540004337392848",
+  "magic_words": [
+    
+  ]
+}

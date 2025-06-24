@@ -1,0 +1,29 @@
+{
+  "participants": [
+    {
+      "name": "Kenny Gagnon"
+    },
+    {
+      "name": "Luke Davis"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Kenny Gagnon",
+      "timestamp_ms": 1732165768412,
+      "content": "Lmaoo,, there\u00e2\u0080\u0099s something about driving a super car to get Mc Donald\u00e2\u0080\u0099s. Real G \u00f0\u009f\u0099\u008c I will be there one day \u00f0\u009f\u009a\u0080",
+      "share": {
+        "link": "https://instagram.com/stories/lukedavis.ig/3505526558914286402"
+      },
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    }
+  ],
+  "title": "Kenny Gagnon",
+  "is_still_participant": true,
+  "thread_path": "message_requests/kennygagnon_1458737818846527",
+  "magic_words": [
+    
+  ],
+  "is_pending": true
+}
