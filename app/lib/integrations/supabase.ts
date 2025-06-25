@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Temporarily using dummy values
+const dummySupabaseUrl = 'https://dummy.supabase.co';
+const dummySupabaseKey = 'dummy_key';
+
 export interface ConversationLog {
   id?: string;
   instagram_user_id: string;
@@ -51,7 +55,10 @@ export interface ConversationState {
 export class SupabaseService {
   private supabase;
 
-  constructor(supabaseUrl: string, supabaseKey: string) {
+  constructor(
+    supabaseUrl: string = dummySupabaseUrl, 
+    supabaseKey: string = dummySupabaseKey
+  ) {
     this.supabase = createClient(supabaseUrl, supabaseKey);
   }
 
@@ -313,8 +320,5 @@ export class SupabaseService {
   }
 }
 
-// Initialize Supabase service
-export const supabaseService = new SupabaseService(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-); 
+// Initialize with dummy values for now
+export const supabaseService = new SupabaseService(); 

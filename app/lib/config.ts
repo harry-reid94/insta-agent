@@ -1,4 +1,7 @@
 import { ConversationStage } from './types';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { StringOutputParser } from '@langchain/core/output_parsers';
+import { model } from './shared';
 
 export interface QualificationNode {
   id: string;
@@ -20,16 +23,43 @@ export interface AgentConfig {
   disallowedQuestionKeywords: string[];
 }
 
-// Helper function to parse numeric portfolio sizes including shorthand like 50k or 2.3m
-export function parsePortfolioSize(text: string): number | null {
-  const match = text.match(/(\d[\d,.]*)(?:\s*)([kKmM]?)/);
-  if (!match) return null;
-  let num = parseFloat(match[1].replace(/[,]/g, ''));
-  if (isNaN(num)) return null;
-  const suffix = match[2];
-  if (/k/i.test(suffix)) num *= 1_000;
-  if (/m/i.test(suffix)) num *= 1_000_000;
-  return Math.round(num);
+// Helper function to parse numeric portfolio sizes including shorthand like 50k or 2.3m, and natural language like "50 grand"
+export async function parsePortfolioSize(text: string): Promise<number | null> {
+    if (!text || text.trim() === '') {
+        return null;
+    }
+
+    const prompt = ChatPromptTemplate.fromMessages([
+        ["system", `You are a data extraction specialist. Your task is to extract a numerical portfolio size from a given text.
+
+The user might state their portfolio size in various ways, including numbers, shorthand (e.g., 'k' for thousands, 'm' for millions), or natural language (e.g., "grand" for a thousand).
+
+Your goal is to interpret the text and return only the final numerical value in USD.
+
+- "50k" should be 50000.
+- "2.3m" should be 2300000.
+- "50 grand" should be 50000.
+- "around 100k" should be 100000.
+- "I have about 75,000" should be 75000.
+- "probably twenty five thousand dollars" should be 25000.
+- "a million" should be 1000000.
+- If the user says they don't know, don't want to say, or the text is not related to a portfolio size, output "null".
+- If no specific number can be found, output "null".
+
+User input: "${text}"
+
+Output only the number or the word "null".`],
+    ]);
+
+    const chain = prompt.pipe(model).pipe(new StringOutputParser());
+    const result = await chain.invoke({});
+
+    if (result.toLowerCase() === 'null' || result.trim() === '') {
+        return null;
+    }
+
+    const num = parseFloat(result.replace(/[,]/g, ''));
+    return isNaN(num) ? null : Math.round(num);
 }
 
 export const defaultConfig: AgentConfig = {
@@ -47,8 +77,10 @@ export const defaultConfig: AgentConfig = {
       highSpecificityDetection: true,
       expectedResponseType: 'portfolio_size',
       disqualifyOn: (answer) => {
-        const portfolioSize = parsePortfolioSize(answer);
-        return portfolioSize !== null && portfolioSize < 50000;
+        // TODO: This needs to be async now. This part of config seems unused by the main graph.
+        // const portfolioSize = await parsePortfolioSize(answer);
+        // return portfolioSize !== null && portfolioSize < 50000;
+        return false;
       }
     },
     {

@@ -12,11 +12,11 @@
     "list-jobs": "NODE_OPTIONS=\"--loader ts-node/esm\" ts-node --esm scripts/list_jobs.ts"
   },
   "dependencies": {
-    "@langchain/core": "^0.3.59",
+    "@langchain/core": "^0.3.61",
     "@langchain/langgraph": "^0.3.4",
     "@langchain/langgraph-cli": "^0.0.40",
-    "@langchain/openai": "^0.5.13",
-    "@supabase/supabase-js": "^2.45.6",
+    "@langchain/openai": "^0.5.15",
+    "@supabase/supabase-js": "^2.50.1",
     "axios": "^1.7.9",
     "dotenv": "^16.5.0",
     "form-data": "^4.0.3",

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { graph, GraphState } from '../../lib/graph';
 import { BaseMessage, AIMessage, HumanMessage } from '@langchain/core/messages';
 import { ConversationStage } from '../../lib/types';
+import { promises as fs } from 'fs';
+import path from 'path';
+
+export const runtime = 'nodejs';
 
 interface UIMessage {
   type: 'human' | 'ai';
@@ -11,6 +15,7 @@ interface UIMessage {
 interface ChatRequestBody {
   messages: UIMessage[] | BaseMessage[];
   state?: Partial<typeof GraphState.State>;
+  conversationId?: string;
 }
 
 const FALLBACK_RESPONSES = {
@@ -43,7 +48,17 @@ export async function POST(req: NextRequest) {
   try {
     // Parse request body
     const body = await req.json();
-    const { messages = [], state = {} }: ChatRequestBody = body;
+    const { messages = [], state = {}, conversationId }: ChatRequestBody = body;
+
+    if (!conversationId) {
+      // This case should ideally not happen if the UI is working correctly
+      console.error('Error: conversationId is missing in the request');
+      return NextResponse.json({ 
+        error: 'Internal server error: Missing conversationId',
+        response: FALLBACK_RESPONSES.ERROR,
+        newState: {} 
+      }, { status: 500 });
+    }
 
     // Convert UI messages to LangGraph messages
     const initialMessages = convertToLangGraphMessages(messages);
@@ -59,6 +74,7 @@ export async function POST(req: NextRequest) {
       repromptAttempts: state.repromptAttempts || {},
       location: state.location,
       response: state.response || '',
+      availableSlots: state.availableSlots || [],
     };
     
     console.log('Initial state:', JSON.stringify(initialState, null, 2));
@@ -66,6 +82,31 @@ export async function POST(req: NextRequest) {
     // Invoke graph
     const result = await graph.invoke(initialState);
     console.log('Graph result:', JSON.stringify(result, null, 2));
+
+    // Save conversation to file
+    try {
+      const dir = path.join('/tmp', 'conversations');
+      await fs.mkdir(dir, { recursive: true });
+      const filename = `${conversationId}.json`;
+      const filepath = path.join(dir, filename);
+      const conversationData = {
+        initialState,
+        result,
+      };
+      await fs.writeFile(filepath, JSON.stringify(conversationData, null, 2));
+      console.log(`Conversation saved to ${filepath}`);
+    } catch (saveError) {
+      console.error('Failed to save conversation:', saveError);
+      // Don't block the response for this, just log it
+    }
+
+    // Allow empty responses if the conversation is being escalated
+    if (result.stage === 'human_override') {
+      return NextResponse.json({ 
+        response: '', 
+        newState: result 
+      });
+    }
 
     // Handle missing response
     if (!result || !result.response) {

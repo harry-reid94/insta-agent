@@ -10,6 +10,7 @@ import { StringOutputParser } from '@langchain/core/output_parsers';
 import { JsonOutputFunctionsParser } from 'langchain/output_parsers';
 import { ghlService } from './integrations/gohighlevel';
 import { analyticalModel } from './shared';
+import { availabilityService } from './availabilityService';
 import { 
     greetingNode,
     askLocationNode,
@@ -17,7 +18,11 @@ import {
     answeringQ1Node,
     answeringQ2Node,
     answeringQ3Node,
-    defaultConversationNode
+    collectEmailNode,
+    bookingConfirmationNode,
+    defaultConversationNode,
+    nurtureFollowUpNode,
+    nurtureFollowUpRepromptNode,
 } from './stages';
 
 // Define the state schema using Annotation
@@ -62,6 +67,10 @@ export const GraphState = Annotation.Root({
   response: Annotation<string>({
     reducer: (x: string, y: string) => y,
     default: () => ''
+  }),
+  availableSlots: Annotation<string[]>({
+    reducer: (x: string[], y: string[]) => y,
+    default: () => []
   })
 });
 
@@ -123,9 +132,11 @@ A response requires human attention if it:
 2. Asks detailed counter-questions requiring specialized expertise
 3. Describes a very complex personal financial situation
 4. Is completely nonsensical, random, or off-topic (like mentioning animals, unrelated topics, gibberish)
-5. Contains inappropriate content or seems like spam/bot behavior
+5. Contains inappropriate, offensive, racist, or discriminatory content, or seems like spam/bot behavior
 6. Is exceptionally detailed beyond normal conversation flow
 7. Shows signs of confusion or misunderstanding about the conversation context
+
+However, do NOT flag responses that are simple, direct answers to scheduling questions (e.g., "10am works", "tomorrow at 2pm", "none of those work for me"). These are expected parts of the booking flow.
 
 Examples that need human attention:
 - "german shepherds at risk of colossal incoherence" (nonsensical)
@@ -179,6 +190,14 @@ async function conversationNode(state: typeof GraphState.State): Promise<Partial
         return rapportBuildingNode(state, lastUserMessage, conversationContext);
     }
 
+    if (currentStage === 'nurture_follow_up') {
+        return nurtureFollowUpNode(state, lastUserMessage, conversationContext);
+    }
+
+    if (currentStage === 'nurture_follow_up_reprompt') {
+        return nurtureFollowUpRepromptNode(state, lastUserMessage, conversationContext);
+    }
+
     if (currentStage === 'answering_Q1') {
         return answeringQ1Node(state, lastUserMessage, conversationContext);
     }
@@ -188,138 +207,58 @@ async function conversationNode(state: typeof GraphState.State): Promise<Partial
     }
 
     if (currentStage === 'answering_Q3') {
-        return answeringQ3Node(state, lastUserMessage);
+        return answeringQ3Node(state, lastUserMessage, conversationContext);
+    }
+    
+    if (currentStage === 'booking') {
+        return collectEmailNode(state, lastUserMessage, conversationContext);
+    }
+
+    if (currentStage === 'collecting_email') {
+        return bookingConfirmationNode(state, lastUserMessage, conversationContext);
     }
     
     // Fallback to a default response
     return defaultConversationNode(state, lastUserMessage, conversationContext);
 }
 
-async function qualifiedNode(state: typeof GraphState.State): Promise<Partial<typeof GraphState.State>> {
-    const answers = state.answers;
-    const portfolioSize = parsePortfolioSize(answers['Q2_portfolio_size'] as string) || 0;
-    
-    try {
-        // Create qualified lead in GHL
-        const { bookingLink } = await ghlService.createQualifiedLead(
-            "there",
-            "",
-            "user",
-            portfolioSize,
-            answers['Q3_pain_points'] as string || '',
-            answers['Q1_bmb_understanding'] as string || '',
-            'Instagram DM'
-        );
-        
-        const response = `let's go! you sound like a perfect fit. let's get you booked in for a call with the team. here's the link: ${bookingLink}`;
-
-        return {
-            response,
-            stage: 'booking',
-            isQualified: true,
-            answers: answers,
-            messages: [new AIMessage(response)]
-        };
-    } catch (error) {
-        console.error('Error in qualified node:', error);
-
-        const response = `let's go! you sound like a perfect fit. let's get you booked in for a call with the team. I will send you the link shortly.`;
-
-        return {
-            response,
-            stage: 'booking',
-            isQualified: true,
-            answers: answers,
-            messages: [new AIMessage(response)]
-        };
-    }
-}
-
-async function nurtureNode(): Promise<Partial<typeof GraphState.State>> {
+async function nurtureNode(): Promise<Partial<GraphStateType>> {
     const response = "all good bro! For now, I'd recommend diving into our YouTube channel to learn more about BMB: https://www.youtube.com/@bullmarketblueprint. Keep building, and hit me up when you're ready to take the next step. 👍🏻";
     return {
         response,
-        stage: 'finished',
+        stage: 'end',
         messages: [new AIMessage(response)],
         isQualified: false
     };
 }
 
 async function humanOverrideNode(): Promise<Partial<typeof GraphState.State>> {
-    // This node is triggered when the conversation requires human intervention.
-    // It sets the stage and clears any pending response to ensure the bot doesn't reply.
     return {
-        response: '', // Clear any response
+        response: '', // Do not send a message, just flag for override
         stage: 'human_override',
         isQualified: undefined
     };
 }
 
-async function finishedNode(): Promise<Partial<typeof GraphState.State>> {
-    const response = "appreciate you brother! feel free to hit me up anytime if you have more questions 🙏🏻";
-    return {
-        response,
-        stage: 'finished',
-        messages: [new AIMessage(response)],
-    };
-}
-
-// Simple router node
-async function routerNode(state: typeof GraphState.State): Promise<Partial<typeof GraphState.State>> {
-    const lastMessage = state.messages[state.messages.length - 1];
-    
-    // If we're waiting for user input (last message was AI), end the turn
-    if (lastMessage instanceof AIMessage) {
-        return {};
-    }
-    
-    return {};
-}
-
 type NodeNames = 
   | typeof START 
   | typeof END 
-  | 'router'
   | 'conversation'
-  | 'qualified'
   | 'nurture'
-  | 'human_override'
-  | 'finished';
+  | 'human_override';
 
 // Create the graph
 const workflow = new StateGraph<typeof GraphState.spec, typeof GraphState.State, Partial<typeof GraphState.State>, NodeNames>(GraphState);
 
 // Add nodes to the graph
-workflow.addNode('router', routerNode);
 workflow.addNode('conversation', conversationNode);
-workflow.addNode('qualified', qualifiedNode);
 workflow.addNode('nurture', nurtureNode);
 workflow.addNode('human_override', humanOverrideNode);
-workflow.addNode('finished', finishedNode);
 
-// Add edges to the graph
-workflow.addEdge(START, 'router');
+// Set entry point
+workflow.addEdge(START, 'conversation');
 
-// Router conditional edges
-workflow.addConditionalEdges(
-  'router',
-  (state) => {
-    const { stage } = state;
-    // If user is booked or nurtured, the next message is a final wrap-up.
-    if (stage === 'booking' || stage === 'nurture') {
-      return 'finished';
-    }
-    // If the process is finished or needs a human, end further AI interaction.
-    if (stage === 'human_override' || stage === 'finished') {
-      return END;
-    }
-    // Otherwise, continue the conversation.
-    return 'conversation';
-  },
-  ['conversation', 'finished', END]
-);
-
-// Conversation stage transitions
+// Add conditional edges from conversation node
 workflow.addConditionalEdges(
   'conversation',
   (state) => {
@@ -330,29 +269,25 @@ workflow.addConditionalEdges(
       return END;
     }
     
-    // Only allow transitions to specialized nodes in specific cases
-    if (state.stage === 'qualified' && state.isQualified === true) {
-      return 'qualified';
-    }
+    // Check for special states that require routing to specific nodes
     if (state.stage === 'nurture' && state.isQualified === false) {
       return 'nurture';
     }
     if (state.stage === 'human_override') {
       return 'human_override';
     }
+    if (state.stage === 'end') {
+      return END;
+    }
     
     // Stay in conversation by default
     return 'conversation';
   },
-  ['conversation', 'qualified', 'nurture', 'human_override', END]
+  ['conversation', 'nurture', 'human_override', END]
 );
 
 // These nodes should end the turn so the user sees the message
-workflow.addEdge('qualified', END);
 workflow.addEdge('nurture', END);
 workflow.addEdge('human_override', END);
-
-// The 'finished' node is for a final wrap-up message if the user responds again.
-workflow.addEdge('finished', END);
 
 export const graph = workflow.compile(); 

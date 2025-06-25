@@ -1,5 +1,9 @@
 import axios from 'axios';
 
+// Temporarily using dummy values
+const dummyApiKey = 'dummy_api_key';
+const dummyLocationId = 'dummy_location_id';
+
 export interface GHLContact {
   id?: string;
   firstName: string;
@@ -45,7 +49,10 @@ export class GoHighLevelService {
   private baseUrl = 'https://rest.gohighlevel.com/v1';
   private locationId: string;
 
-  constructor(apiKey: string, locationId: string) {
+  constructor(
+    apiKey: string = dummyApiKey,
+    locationId: string = dummyLocationId
+  ) {
     this.apiKey = apiKey;
     this.locationId = locationId;
   }
@@ -280,8 +287,5 @@ export class GoHighLevelService {
   }
 }
 
-// Initialize GoHighLevel service
-export const ghlService = new GoHighLevelService(
-  process.env.GHL_API_KEY || '',
-  process.env.GHL_LOCATION_ID || ''
-); 
+// Initialize with dummy values for now
+export const ghlService = new GoHighLevelService(); 

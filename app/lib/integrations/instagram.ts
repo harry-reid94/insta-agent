@@ -1,5 +1,9 @@
 import axios from 'axios';
 
+// Temporarily using dummy values
+const dummyAccessToken = 'dummy_token';
+const dummyPageId = 'dummy_page_id';
+
 export interface InstagramUser {
   id: string;
   username?: string;
@@ -26,7 +30,10 @@ export class InstagramService {
   private pageId: string;
   private baseUrl = 'https://graph.facebook.com/v18.0';
 
-  constructor(accessToken: string, pageId: string) {
+  constructor(
+    accessToken: string = dummyAccessToken,
+    pageId: string = dummyPageId
+  ) {
     this.accessToken = accessToken;
     this.pageId = pageId;
   }
@@ -187,8 +194,5 @@ export class InstagramService {
   }
 }
 
-// Initialize Instagram service
-export const instagramService = new InstagramService(
-  process.env.INSTAGRAM_ACCESS_TOKEN || '',
-  process.env.INSTAGRAM_PAGE_ID || ''
-); 
+// Initialize with dummy values for now
+export const instagramService = new InstagramService(); 

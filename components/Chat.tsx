@@ -34,8 +34,10 @@ interface ConversationState {
 }
 
 interface ChatResponse {
-  response: string;
+  response?: string;
+  messages?: Message[];
   newState: ConversationState;
+  conversationId?: string;
   error?: string;
 }
 
@@ -58,30 +60,17 @@ const MessageBubble = ({ content, role, isSpecific }: Message) => {
       : 'bg-gray-200 text-black mr-auto'
   }`;
 
-  const multipleVariants = role === 'assistant' && messageParts.length > 1;
-
   return (
     <div className={`flex ${role === 'user' ? 'justify-end' : 'justify-start'} flex-col gap-2`}>
-      {multipleVariants ? (
-        <div className={bubbleClass}>
-          {messageParts[0]}
-          {messageParts.length > 1 && (
-            <div className="mt-2 text-xs text-gray-500">
-              {messageParts.length - 1} more variant{messageParts.length > 2 ? 's' : ''}
-            </div>
-          )}
+      {messageParts.map((part, idx) => (
+        <div key={idx} className={bubbleClass}>
+          {part}
         </div>
-      ) : (
-        messageParts.map((part, idx) => (
-          <div key={idx} className={bubbleClass}>
-            {part}
-          </div>
-        ))
-      )}
+      ))}
 
       {isSpecific && role === 'user' && (
-        <div className="text-xs text-yellow-600 italic ml-auto mr-2">
-          One moment while I transfer you to a specialist
+        <div className="text-xs text-red-600 font-semibold ml-auto mr-2">
+          highly specific response detected – human override initiated
         </div>
       )}
     </div>
@@ -92,78 +81,53 @@ export default function Chat() {
   const [chatInitiated, setChatInitiated] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [state, setState] = useState<ConversationState>({
-      stage: 'greeting',
-      answers: {},
-      lastQuestionAsked: '',
-      isQualified: undefined,
-      currentQuestionId: undefined,
-      repromptAttempts: {},
-      location: undefined,
-      response: '',
-  });
+  const [state, setState] = useState<ConversationState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (chatInitiated) {
-      const initiateChat = async () => {
-        try {
-          setIsLoading(true);
-          setMessages([]);
-          const initialState: ConversationState = { 
-            stage: 'greeting', 
-            answers: {}, 
-            lastQuestionAsked: '',
-            isQualified: undefined,
-            currentQuestionId: undefined,
-            repromptAttempts: {},
-            location: undefined,
-            response: '',
-          };
-          setState(initialState);
+  const handleTrigger = async (triggerApi: string) => {
+    try {
+      setIsLoading(true);
+      setMessages([]);
+      const response = await fetch(triggerApi, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-          const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              messages: [], 
-              state: initialState 
-            }),
-          });
+      if (!response.ok) throw new Error(`Failed to trigger: ${triggerApi}`);
 
-          if (!response.ok) {
-            throw new Error('Failed to get initial message');
-          }
+      const data: ChatResponse = await response.json();
+      
+      if (data.messages) {
+        setMessages(data.messages);
+      } else if (data.response) {
+        const assistantMessages: Message[] = splitAssistantResponse(data.response).map(seg => ({
+          role: 'assistant',
+          content: seg,
+          isSpecific: false,
+        }));
+        setMessages(assistantMessages);
+      } else {
+        throw new Error('Trigger API returned no messages or response');
+      }
 
-          const data: ChatResponse = await response.json();
-          
-          if (!data.response) {
-            throw new Error('No response received');
-          }
-
-          const assistantMessages: Message[] = splitAssistantResponse(data.response).map(seg => ({
-            role: 'assistant',
-            content: seg,
-            isSpecific: false,
-          }));
-          
-          setMessages(assistantMessages);
-          setState(data.newState);
-        } catch (error) {
-          console.error('Error initiating chat:', error);
-          // Set a fallback greeting message if the API fails
-          setMessages([{
-            role: 'assistant',
-            content: "Hey man! What's up?",
-            isSpecific: false
-          }]);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      initiateChat();
+      setState(data.newState);
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
+      }
+      setChatInitiated(true);
+    } catch (error) {
+      console.error('Error handling trigger:', error);
+      setMessages([{
+        role: 'assistant',
+        content: "My bad bro, something went wrong. Try again in a bit.",
+        isSpecific: false
+      }]);
+      setChatInitiated(true); // show the chat window even on error
+    } finally {
+      setIsLoading(false);
     }
-  }, [chatInitiated]);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -189,7 +153,8 @@ export default function Chat() {
             type: m.role === 'user' ? 'human' : 'ai',
             content: m.content
           })), 
-          state 
+          state,
+          conversationId,
         }),
       });
 
@@ -199,28 +164,30 @@ export default function Chat() {
 
       const data: ChatResponse = await response.json();
       
-      if (!data.response) {
-        throw new Error('No response received');
-      }
-
-      const assistantMessages: Message[] = splitAssistantResponse(data.response).map(seg => ({
-        role: 'assistant',
-        content: seg,
-        isSpecific: false,
-      }));
-      
-      // Update the last user message's isSpecific flag if the state changed to human_override
-      if (data.newState.stage === 'human_override' && messages.length > 0) {
+      if (data.newState.stage === 'human_override') {
         setMessages(prev => {
           const updated = [...prev];
-          updated[updated.length - 1].isSpecific = true;
-          return [...updated, ...assistantMessages];
+          const lastUserMessageIndex = updated.map(m => m.role).lastIndexOf('user');
+          if (lastUserMessageIndex !== -1) {
+            updated[lastUserMessageIndex] = { ...updated[lastUserMessageIndex], isSpecific: true };
+          }
+          return updated;
         });
+      } else if (!data.response) {
+        throw new Error('No response received');
       } else {
+        const assistantMessages: Message[] = splitAssistantResponse(data.response).map(seg => ({
+          role: 'assistant',
+          content: seg,
+          isSpecific: false,
+        }));
         setMessages(prev => [...prev, ...assistantMessages]);
       }
       
       setState(data.newState);
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       // Add a fallback error message
@@ -237,12 +204,30 @@ export default function Chat() {
   if (!chatInitiated) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <button
-          onClick={() => setChatInitiated(true)}
-          className="bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-blue-600 transition-colors"
-        >
-          Start Chat
-        </button>
+        <div className="flex flex-col space-y-4">
+          <h1 className="text-2xl font-bold text-center">Simulate a Trigger</h1>
+          <button
+            onClick={() => handleTrigger('/api/trigger/new-follower')}
+            disabled={isLoading}
+            className="bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-blue-600 transition-colors disabled:bg-blue-300"
+          >
+            {isLoading ? 'Loading...' : 'Simulate New Follower'}
+          </button>
+          <button
+            onClick={() => handleTrigger('/api/trigger/nurture-follow-up')}
+            disabled={isLoading}
+            className="bg-green-500 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-green-600 transition-colors disabled:bg-green-300"
+          >
+            {isLoading ? 'Loading...' : 'Simulate Nurture Follow-up'}
+          </button>
+          <button
+            onClick={() => handleTrigger('/api/trigger/manual-trigger')}
+            disabled={isLoading}
+            className="bg-purple-500 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-purple-600 transition-colors disabled:bg-purple-300"
+          >
+            {isLoading ? 'Loading...' : 'Simulate Manual Trigger'}
+          </button>
+        </div>
       </div>
     );
   }
@@ -252,16 +237,16 @@ export default function Chat() {
       {/* Debug Side Panel */}
       <div className="fixed top-4 left-4 bg-gray-800 text-gray-100 text-xs rounded-lg shadow-lg p-3 space-y-1 z-50 w-56">
         <div className="font-semibold text-center underline">Debug</div>
-        <div>Stage: <span className="font-semibold">{state.stage}</span></div>
+        <div>Stage: <span className="font-semibold">{state?.stage}</span></div>
         <div>
           Status:{' '}
-          <span className={`font-semibold ${state.isQualified === true ? 'text-green-400' : state.isQualified === false ? 'text-red-400' : 'text-gray-400'}`}>
-            {state.isQualified === true ? 'Qualified' : state.isQualified === false ? 'Not Qualified' : 'Pending'}
+          <span className={`font-semibold ${state?.isQualified === true ? 'text-green-400' : state?.isQualified === false ? 'text-red-400' : 'text-gray-400'}`}>
+            {state?.isQualified === true ? 'Qualified' : state?.isQualified === false ? 'Not Qualified' : 'Pending'}
           </span>
         </div>
-        <div>Location: <span className="font-semibold">{state.location || 'Not Set'}</span></div>
-        <div>Current Q: <span className="font-semibold">{state.currentQuestionId || 'None'}</span></div>
-        <div>Last Asked: <span className="font-semibold">{state.lastQuestionAsked || 'None'}</span></div>
+        <div>Location: <span className="font-semibold">{state?.location || 'Not Set'}</span></div>
+        <div>Current Q: <span className="font-semibold">{state?.currentQuestionId || 'None'}</span></div>
+        <div>Last Asked: <span className="font-semibold">{state?.lastQuestionAsked || 'None'}</span></div>
         <div>
           Highly Specific:{' '}
           <span className={`font-semibold ${messages.some(m => m.isSpecific) ? 'text-yellow-400' : 'text-gray-400'}`}>
@@ -270,14 +255,14 @@ export default function Chat() {
         </div>
         <div>
           Human Override:{' '}
-          <span className={`font-semibold ${state.stage === 'human_override' ? 'text-orange-400' : 'text-gray-400'}`}>
-            {state.stage === 'human_override' ? 'Active' : 'No'}
+          <span className={`font-semibold ${state?.stage === 'human_override' ? 'text-orange-400' : 'text-gray-400'}`}>
+            {state?.stage === 'human_override' ? 'Active' : 'No'}
           </span>
         </div>
         <div>
           Answers:{' '}
           <div className="pl-2 mt-1 space-y-1">
-            {Object.entries(state.answers).map(([key, value]) => (
+            {Object.entries(state?.answers || {}).map(([key, value]) => (
               <div key={key}>
                 <span className="opacity-75">{key}:</span>{' '}
                 <span className="font-semibold">{value}</span>
@@ -290,19 +275,19 @@ export default function Chat() {
       {/* System Status Bar */}
       <div className="p-2 bg-gray-800 text-xs text-gray-300 font-mono flex justify-between items-center">
         <div>
-          {state.stage === 'human_override' && (
+          {state?.stage === 'human_override' && (
             <span className="text-orange-400">
               [system] human_override_process_initiated
             </span>
           )}
-          {state.stage === 'booking' && (
+          {state?.stage === 'booking' && (
             <span className="text-green-400">
               [system] booking_process_initiated
             </span>
           )}
         </div>
         <div>
-          {state.isQualified !== undefined && state.isQualified && (
+          {state?.isQualified !== undefined && state?.isQualified && (
             <span className="text-blue-400">
               [status] lead_qualified=true
             </span>
