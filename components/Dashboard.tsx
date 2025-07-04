@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabaseService, LeadData } from '../app/lib/integrations/supabase';
+import { Gender } from '../app/lib/types';
 
 interface DashboardStats {
   totalLeads: number;
@@ -31,6 +32,8 @@ export default function Dashboard() {
   const [humanOverrideLeads, setHumanOverrideLeads] = useState<LeadData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<'overview' | 'qualified' | 'overrides'>('overview');
+  const [editingGender, setEditingGender] = useState<string | null>(null);
+  const [selectedGender, setSelectedGender] = useState<Gender>('unknown');
 
   useEffect(() => {
     loadDashboardData();
@@ -101,6 +104,27 @@ export default function Dashboard() {
       console.error('Error marking for takeover:', error);
       alert('Error marking conversation for takeover');
     }
+  };
+
+  const handleGenderUpdate = async (conversationId: string, gender: Gender) => {
+    try {
+      // Update gender for the lead
+      const lead = qualifiedLeads.find(l => l.conversation_id === conversationId);
+      if (lead) {
+        await supabaseService.upsertLead({ ...lead, gender });
+        loadDashboardData(); // Refresh data
+        setEditingGender(null);
+        alert('Gender updated successfully');
+      }
+    } catch (error) {
+      console.error('Error updating gender:', error);
+      alert('Error updating gender');
+    }
+  };
+
+  const startEditingGender = (conversationId: string, currentGender?: Gender) => {
+    setEditingGender(conversationId);
+    setSelectedGender(currentGender || 'unknown');
   };
 
   const formatDate = (dateString: string) => {
@@ -209,6 +233,9 @@ export default function Dashboard() {
                           Pain Points
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Gender
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           Date
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -234,6 +261,43 @@ export default function Dashboard() {
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                             {lead.pain_points || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {editingGender === lead.conversation_id ? (
+                              <div className="flex items-center space-x-2">
+                                <select
+                                  value={selectedGender}
+                                  onChange={(e) => setSelectedGender(e.target.value as Gender)}
+                                  className="border rounded px-2 py-1 text-sm"
+                                >
+                                  <option value="male">Male</option>
+                                  <option value="female">Female</option>
+                                  <option value="unknown">Don't Know</option>
+                                </select>
+                                <button
+                                  onClick={() => handleGenderUpdate(lead.conversation_id, selectedGender)}
+                                  className="text-green-600 hover:text-green-900 text-xs"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => setEditingGender(null)}
+                                  className="text-gray-600 hover:text-gray-900 text-xs"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center space-x-2">
+                                <span>{lead.gender || 'Unknown'}</span>
+                                <button
+                                  onClick={() => startEditingGender(lead.conversation_id, lead.gender)}
+                                  className="text-blue-600 hover:text-blue-900 text-xs"
+                                >
+                                  Edit
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {lead.created_at ? formatDate(lead.created_at) : 'N/A'}

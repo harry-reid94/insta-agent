@@ -15,6 +15,8 @@ import {
     greetingNode,
     askLocationNode,
     rapportBuildingNode,
+    locationResponseNode,
+    cryptoInterestQuestionsNode,
     answeringQ1Node,
     answeringQ2Node,
     answeringQ3Node,
@@ -71,6 +73,10 @@ export const GraphState = Annotation.Root({
   availableSlots: Annotation<string[]>({
     reducer: (x: string[], y: string[]) => y,
     default: () => []
+  }),
+  gender: Annotation<string | undefined>({
+    reducer: (x: string | undefined, y: string | undefined) => y,
+    default: () => undefined
   })
 });
 
@@ -190,6 +196,14 @@ async function conversationNode(state: typeof GraphState.State): Promise<Partial
         return rapportBuildingNode(state, lastUserMessage, conversationContext);
     }
 
+    if (currentStage === 'location_response') {
+        return locationResponseNode(state, lastUserMessage, conversationContext);
+    }
+
+    if (currentStage === 'crypto_interest_questions') {
+        return cryptoInterestQuestionsNode(state, lastUserMessage, conversationContext);
+    }
+
     if (currentStage === 'nurture_follow_up') {
         return nurtureFollowUpNode(state, lastUserMessage, conversationContext);
     }
@@ -223,7 +237,7 @@ async function conversationNode(state: typeof GraphState.State): Promise<Partial
 }
 
 async function nurtureNode(): Promise<Partial<GraphStateType>> {
-    const response = "all good bro! For now, I'd recommend diving into our YouTube channel to learn more about BMB: https://www.youtube.com/@bullmarketblueprint. Keep building, and hit me up when you're ready to take the next step. 👍🏻";
+    const response = "appreciate you sharing! Right now, BMB probably isn't the right fit based on your current situation. We're generally looking for investors with a bit more capital to make the most of the strategies we teach.\n\nBut I've got some free resources that might help you on your journey: https://www.youtube.com/@bullmarketblueprint\n\nKeep building, and let's catch up when your portfolio grows.";
     return {
         response,
         stage: 'end',

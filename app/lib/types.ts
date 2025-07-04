@@ -6,6 +6,8 @@ export type ConversationStage =
   | 'nurture_follow_up_reprompt'
   | 'manual_trigger'
   | 'rapport_building'
+  | 'location_response'
+  | 'crypto_interest_questions'
   | 'answering_Q1'
   | 'answering_Q2'
   | 'answering_Q3'
@@ -16,4 +18,7 @@ export type ConversationStage =
   | 'nurture_sent'
   | 'final_message'
   | 'end'
-  | 'human_override'; 
+  | 'human_override';
+
+// Define gender options
+export type Gender = 'male' | 'female' | 'unknown'; 

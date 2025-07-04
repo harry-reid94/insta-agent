@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Gender } from '../types';
 
 // Temporarily using dummy values
 const dummySupabaseUrl = 'https://dummy.supabase.co';
@@ -35,6 +36,7 @@ export interface LeadData {
   updated_at?: string;
   answers?: Record<string, any>;
   metadata?: Record<string, any>;
+  gender?: Gender;
 }
 
 export interface ConversationState {
@@ -50,6 +52,7 @@ export interface ConversationState {
   reprompt_attempts?: Record<string, number>;
   created_at?: string;
   updated_at?: string;
+  gender?: Gender;
 }
 
 export class SupabaseService {

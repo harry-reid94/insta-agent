@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
       currentQuestionId: undefined,
       repromptAttempts: {},
       location: conversationState.location,
-      response: ''
+      response: '',
+      availableSlots: []
     };
 
     const result = await graph.invoke(graphState);

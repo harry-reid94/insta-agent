@@ -1,7 +1,7 @@
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
-import { model, LUKE_PERSONA } from './shared';
+import { model, LUKE_PERSONA, getGenderAwarePersona } from './shared';
 import { GraphStateType } from './graph';
 import { ConversationStage } from './types';
 import { parsePortfolioSize } from './config';
@@ -131,7 +131,7 @@ Provide only the classification and content, separated by a pipe |.`;
         let responseSystemPrompt;
         if (type === 'QUESTION') {
             if (validationType === 'numeric') {
-                responseSystemPrompt = `${LUKE_PERSONA}
+                responseSystemPrompt = `${getGenderAwarePersona(state.gender)}
 
 You previously asked for the user's portfolio size: "${lastQuestionAsked}"
 Instead of answering, the user asked their own question: "${content}"
@@ -155,7 +155,7 @@ ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
             } else {
-                responseSystemPrompt = `${LUKE_PERSONA}
+                responseSystemPrompt = `${getGenderAwarePersona(state.gender)}
 
 You previously asked: "${lastQuestionAsked}"
 Instead of answering, the user asked their own question: "${content}"
@@ -181,7 +181,7 @@ Generate Luke's natural response without quotes.`;
             }
         } else { // OFF_TOPIC
             if (validationType === 'numeric') {
-                responseSystemPrompt = `${LUKE_PERSONA}
+                responseSystemPrompt = `${getGenderAwarePersona(state.gender)}
 
 You previously asked for the user's portfolio size: "${lastQuestionAsked}"
 The user gave an evasive or non-numeric response: "${content}"
@@ -205,7 +205,7 @@ ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
             } else {
-                responseSystemPrompt = `${LUKE_PERSONA}
+                responseSystemPrompt = `${getGenderAwarePersona(state.gender)}
 
 You previously asked: "${lastQuestionAsked}"
 The user gave an off-topic or evasive response: "${content}"
@@ -245,7 +245,7 @@ Generate Luke's natural response without quotes.`;
 
 export async function greetingNode(state: GraphStateType, options?: { noGreetingWord?: boolean }) {
     const systemPrompt = options?.noGreetingWord 
-      ? `${LUKE_PERSONA}
+      ? `${getGenderAwarePersona(state.gender)}
 
 You've already said hi. Now, ask a follow-up question to get the conversation going.
 
@@ -256,14 +256,14 @@ Choose one of Luke's authentic follow-up questions:
 - "how's your week been?"
 
 Generate just the question - natural and casual like Luke would actually send, without quotes.`
-      : `${LUKE_PERSONA}
+      : `${getGenderAwarePersona(state.gender)}
 
-Someone just reached out about BullMarketBlueprint. Start the conversation exactly how Luke would - casual but purposeful.
+Someone just reached out or followed you. Start the conversation exactly how Luke would - casual and friendly, focusing on getting to know them first rather than pushing BMB.
 
 Choose from Luke's authentic greeting patterns:
-- "hey brother, how's your day going?"
-- "what's up bro, how you doing?"
-- "hey brother, how's everything with you?"
+- "hey, how's your day going?"
+- "what's up, how you doing?"
+- "hey there, how's everything with you?"
 - "yo, how's your week been?"
 
 Generate just the greeting - natural and casual like Luke would actually send, without quotes.`;
@@ -311,7 +311,7 @@ Provide only the classification and content, separated by a pipe |.`],
     let systemMessage;
 
     if (type === 'QUESTION') {
-        systemMessage = `${LUKE_PERSONA}
+        systemMessage = `${getGenderAwarePersona(state.gender)}
 
 They responded to your greeting with a question: "${content}"
 
@@ -337,21 +337,21 @@ ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
     } else { // GREETING_RESPONSE
-        systemMessage = `${LUKE_PERSONA}
+        systemMessage = `${getGenderAwarePersona(state.gender)}
 
 They responded to your greeting: "${lastUserMessage}"
 
 Respond exactly like Luke would:
-- If they asked how you are (e.g. "good u", "and you?"), give a SHORT, casual answer like "all good brother" or "good man" and then immediately ask your question.
+- If they asked how you are (e.g. "good u", "and you?"), give a SHORT, casual answer with varied acknowledgments like "good man", "solid", "appreciate it" then immediately ask your question.
 - Acknowledge what they said naturally.
-- Then ask where they're based/located using Luke's style.
+- Then ask what they're interested in - crypto/trading content or lifestyle content. This helps gauge their intent.
 - DON'T repeat "Hey" since you already used it in the greeting.
 
-Luke's location question patterns:
-- "nice bro, where you based?"
-- "where you located?"
-- "what part of the world you in?"
-- "where you located?"
+Luke's intent-gauging question patterns:
+- "nice! what brings you here - you into crypto content or more the lifestyle stuff?"
+- "solid! are you here for crypto trading content or just checking out the lifestyle side?"
+- "got you. what caught your eye - the crypto trading or lifestyle content?"
+- "appreciate it. what's your interest - crypto/trading or lifestyle content?"
 
 Conversation so far:
 ${conversationContext}
@@ -375,43 +375,71 @@ Generate Luke's natural response without quotes.`;
 }
 
 export async function rapportBuildingNode(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
+    // Check if they mentioned crypto/trading interest
+    const cryptoInterest = /crypto|trading|bitcoin|blockchain|invest|portfolio|defi|altcoin|eth|btc|degen|bull|bear|market/i.test(lastUserMessage);
+    const lifestyleInterest = /lifestyle|travel|dubai|luxury|life|experiences|personal|motivation|mindset/i.test(lastUserMessage);
+    
+    // Check if they ask about Luke
     const userAsksBack = /you\?|\band you\b|wbu|what about you/i.test(lastUserMessage);
 
     let systemMessage;
-    if (userAsksBack) {
-        systemMessage = `${LUKE_PERSONA}
+    
+    if (cryptoInterest) {
+        systemMessage = `${getGenderAwarePersona(state.gender)}
 
-They responded about location with: "${lastUserMessage}" and asked about you.
+They responded about their interest with: "${lastUserMessage}" - they seem interested in crypto/trading content.
 
 Your task is to:
-1. Acknowledge their location naturally.
-2. Share that you are based in Dubai.
-3. Ask them what they know about BMB to transition the conversation.
+1. Acknowledge their interest naturally with varied phrases.
+2. Ask where they're based/located to continue building rapport.
+3. Keep it conversational and not pushy.
 
-Luke's acknowledgment and transition patterns:
-- "lovely bro, beautiful spot. I'm in Dubai. give me the rundown - what you know about BullMarketBlueprint?"
-- "nice man, I'm based in Dubai. what you know about BMB?"
-- "got you bro, I'm Dubai-based. so what brings you to BMB? what you heard about us?"
+Luke's acknowledgment and location question patterns:
+- "nice! crypto's been wild lately. where you based?"
+- "solid, love meeting fellow crypto people. what part of the world you in?"
+- "appreciate it! always good to connect with someone in the space. where you located?"
+- "got you, crypto community is strong. where you based?"
+
+Conversation so far:
+${conversationContext}
+
+Generate Luke's natural response without quotes.`;
+    } else if (lifestyleInterest) {
+        systemMessage = `${getGenderAwarePersona(state.gender)}
+
+They responded about their interest with: "${lastUserMessage}" - they seem more interested in lifestyle content.
+
+Your task is to:
+1. Acknowledge their interest naturally.
+2. Since they're more lifestyle-focused, keep the conversation light and don't push crypto content.
+3. Ask where they're based to continue building rapport.
+
+Luke's acknowledgment patterns for lifestyle interest:
+- "nice! lifestyle content is fun to share. where you based?"
+- "solid, always good to connect. what part of the world you in?"
+- "appreciate it! love meeting new people. where you located?"
+- "got you. where you based?"
 
 Conversation so far:
 ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
     } else {
-        systemMessage = `${LUKE_PERSONA}
+        // Vague or non-specific response
+        systemMessage = `${getGenderAwarePersona(state.gender)}
 
-They responded about location with: "${lastUserMessage}". They did NOT ask about your location.
+They gave a vague response about their interest: "${lastUserMessage}"
 
 Your task is to:
-1. Acknowledge their location naturally.
-2. DO NOT mention you are in Dubai.
-3. Ask them what they know about BMB to transition the conversation.
+1. Acknowledge their response naturally.
+2. Ask where they're based to continue building rapport.
+3. Keep it light and conversational.
 
-Luke's acknowledgment and transition patterns (without mentioning Dubai):
-- "nice man! so what you know about BMB?"
-- "awesome brother, beautiful spot. give me the rundown - what you know about BullMarketBlueprint?"
-- "got you bro. so what brings you to BMB? what you heard about us?"
-- "solid! so tell me, what you know about what we do at BMB?"
+Luke's acknowledgment and location question patterns:
+- "fair enough! where you based?"
+- "got you. what part of the world you in?"
+- "solid. where you located?"
+- "nice! where you based?"
 
 Conversation so far:
 ${conversationContext}
@@ -430,9 +458,120 @@ Generate Luke's natural response without quotes.`;
 
     return {
         response,
-        stage: 'answering_Q1' as ConversationStage,
+        stage: 'location_response' as ConversationStage,
         location,
         messages: [new AIMessage(response)],
+        lastQuestionAsked: response
+    };
+}
+
+export async function locationResponseNode(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
+    const userAsksBack = /you\?|\band you\b|wbu|what about you/i.test(lastUserMessage);
+
+    let systemMessage;
+    if (userAsksBack) {
+        systemMessage = `${getGenderAwarePersona(state.gender)}
+
+They responded about location with: "${lastUserMessage}" and asked about you.
+
+Your task is to:
+1. Acknowledge their location naturally with varied phrases.
+2. Share that you are based in Dubai.
+3. Ask a more conversational question to build rapport instead of jumping straight to BMB. Use one of these approaches:
+   - Ask about their crypto/trading experience: "how long have you been in crypto?"
+   - Ask about their portfolio performance: "how's your portfolio been performing lately?"
+   - Ask about their investing experience: "what got you into investing?"
+
+Luke's acknowledgment and transition patterns:
+- "nice! beautiful spot. I'm in Dubai man. how long have you been in crypto?"
+- "solid, I'm based in Dubai. how's your portfolio been performing lately?"
+- "appreciate it! I'm Dubai-based. what got you into investing?"
+- "got you, I'm in Dubai. how long have you been trading?"
+
+Conversation so far:
+${conversationContext}
+
+Generate Luke's natural response without quotes.`;
+    } else {
+        systemMessage = `${getGenderAwarePersona(state.gender)}
+
+They responded about location with: "${lastUserMessage}". They did NOT ask about your location.
+
+Your task is to:
+1. Acknowledge their location naturally with varied phrases.
+2. DO NOT mention you are in Dubai.
+3. Ask a more conversational question to build rapport instead of jumping straight to BMB. Use one of these approaches:
+   - Ask about their crypto/trading experience: "how long have you been in crypto?"
+   - Ask about their portfolio performance: "how's your portfolio been performing lately?"
+   - Ask about their investing experience: "what got you into investing?"
+
+Luke's acknowledgment and transition patterns (without mentioning Dubai):
+- "nice! how long have you been in crypto?"
+- "solid. how's your portfolio been performing lately?"
+- "appreciate it! what got you into investing?"
+- "got you. how long have you been trading?"
+
+Conversation so far:
+${conversationContext}
+
+Generate Luke's natural response without quotes.`;
+    }
+
+    const prompt = ChatPromptTemplate.fromMessages([
+        ["system", systemMessage],
+    ]);
+
+    const chain = prompt.pipe(model).pipe(new StringOutputParser());
+    const response = await chain.invoke({});
+
+    const location = await extractLocation(lastUserMessage);
+
+    return {
+        response,
+        stage: 'crypto_interest_questions' as ConversationStage,
+        location,
+        messages: [new AIMessage(response)],
+        lastQuestionAsked: response
+    };
+}
+
+export async function cryptoInterestQuestionsNode(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
+    const prompt = ChatPromptTemplate.fromMessages([
+        ["system", `${getGenderAwarePersona(state.gender)}
+
+They responded to your crypto/investing question with: "${lastUserMessage}"
+
+Your task is to:
+1. Acknowledge their response naturally with varied phrases.
+2. Ask a follow-up question to continue building rapport and understanding their situation.
+3. DO NOT jump straight to BMB or portfolio size yet - keep building the conversation.
+
+Choose one of these follow-up approaches based on their response:
+- If they mentioned experience/time: "solid! what's been your biggest challenge so far?"
+- If they mentioned performance: "fair enough. what's been the trickiest part for you?"
+- If they mentioned getting started: "got you. what's been the biggest hurdle?"
+- If they gave a vague answer: "appreciate it. what's been your main focus lately?"
+
+Luke's acknowledgment and question patterns:
+- "nice! what's been your biggest challenge so far?"
+- "solid. what's been the trickiest part for you?"
+- "got you. what's been the biggest hurdle?"
+- "appreciate it. what's your main focus been lately?"
+
+Conversation so far:
+${conversationContext}
+
+Generate Luke's natural response without quotes.`],
+    ]);
+
+    const chain = prompt.pipe(model).pipe(new StringOutputParser());
+    const response = await chain.invoke({});
+
+    return {
+        response,
+        stage: 'answering_Q3' as ConversationStage, // Skip straight to Q3 (pain points)
+        messages: [new AIMessage(response)],
+        answers: { ...state.answers, crypto_experience: lastUserMessage },
         lastQuestionAsked: response
     };
 }
@@ -440,10 +579,10 @@ Generate Luke's natural response without quotes.`;
 // This is the core logic for answering Q1, extracted from the original node.
 async function q1MainLogic(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
     // You can provide the detailed BMB explanation here.
-    const BMB_EXPLANATION = "it's an exclusive mastermind for serious crypto investors, giving you the tools, insights, and strategies to build your wealth in crypto."
+    const BMB_EXPLANATION = "We've built risk management software that helps us outperform the returns from a typical buy and hold strategy. It's an exclusive group for serious crypto investors looking to build real wealth."
 
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${LUKE_PERSONA}
+        ["system", `${getGenderAwarePersona(state.gender)}
 
 You can send multiple messages to make the conversation feel more natural. To do this, separate each message with a new line.
 For example:
@@ -498,78 +637,75 @@ export async function answeringQ1Node(state: GraphStateType, lastUserMessage: st
     return handleUserResponse(state, lastUserMessage, conversationContext, q1MainLogic);
 }
 
-// This is the core logic for answering Q2, extracted from the original node.
-async function q2MainLogic(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
-    // This simplified logic moves on to Q3 regardless of the answer,
-    // as evasive/non-numeric answers are handled by the response handler.
-    const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${LUKE_PERSONA}
-
-They responded to your portfolio size question (Q2) with: "${lastUserMessage}"
-
-Your task is to:
-1. Acknowledge their answer naturally (even if it wasn't a clear number, just move on).
-2. Ask them about their main pain points or what they're struggling with. This is Q3.
-3. You can split your response into multiple messages using a new line to make it sound more natural.
-
-Luke's pain point question patterns:
-- "got you brother, that's a solid starting point.
-what's the biggest challenge for you right now when it comes to investing?"
-- "nice one man. so what are you struggling with most? what's holding you back?"
-- "all good bro. tell me, what's the main thing you're trying to figure out or improve on?"
-- "okay solid. and what's the biggest hurdle for you at the moment?"
-
-Conversation so far:
-${conversationContext}
-
-Generate Luke's natural response to ask about their challenges without quotes.`],
-    ]);
-
-    const chain = prompt.pipe(model).pipe(new StringOutputParser());
-    const responseString = await chain.invoke({});
-    const response = responseString.split('\n');
-    const lastQuestion = response[response.length - 1];
-
-    return {
-        response: responseString,
-        stage: 'answering_Q3' as ConversationStage,
-        messages: [new AIMessage(responseString)],
-        answers: { ...state.answers, Q2_portfolio_size: lastUserMessage },
-        lastQuestionAsked: lastQuestion,
-    };
-}
+// This is the old Q2 logic - now unused since we changed the flow
+// Keeping for reference but it's not called anymore
 
 export async function answeringQ2Node(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
-    return handleUserResponse(state, lastUserMessage, conversationContext, q2MainLogic, 'numeric');
+    return handleUserResponse(state, lastUserMessage, conversationContext, portfolioSizeMainLogic, 'numeric');
 }
 
 // This is the core logic for answering Q3, extracted from the original node.
 async function q3MainLogic(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
-    const answers = { ...state.answers, Q3_pain_points: lastUserMessage };
-    const portfolioSizeRaw = state.answers['Q2_portfolio_size'] as string || '0';
-    const portfolioSize = await parsePortfolioSize(portfolioSizeRaw) || 0;
+    // First, acknowledge their pain points and then ask about portfolio size
+    const prompt = ChatPromptTemplate.fromMessages([
+        ["system", `${getGenderAwarePersona(state.gender)}
+
+They responded to your question about challenges with: "${lastUserMessage}"
+
+Your task is to:
+1. Acknowledge their challenge naturally with varied phrases.
+2. Ask about their portfolio size in a casual, non-pushy way.
+3. Make it clear it's just for context to see how to best help them.
+
+Luke's acknowledgment and portfolio question patterns:
+- "makes sense. what are you working with portfolio-wise? just so I can get a better picture"
+- "fair enough. what's your portfolio sitting at right now? just helps me understand your situation"
+- "got you. what are you working with investment-wise? just a rough idea is fine"
+- "appreciate it. what's your portfolio size looking like? just so I know how to best help"
+
+Conversation so far:
+${conversationContext}
+
+Generate Luke's natural response without quotes.`],
+    ]);
+
+    const chain = prompt.pipe(model).pipe(new StringOutputParser());
+    const response = await chain.invoke({});
+
+    return {
+        response,
+        stage: 'answering_Q2' as ConversationStage, // Now ask for portfolio size
+        messages: [new AIMessage(response)],
+        answers: { ...state.answers, Q3_pain_points: lastUserMessage },
+        lastQuestionAsked: response,
+    };
+}
+
+// Portfolio size logic that handles qualification after pain points
+async function portfolioSizeMainLogic(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
+    const answers = { ...state.answers, Q2_portfolio_size: lastUserMessage };
+    const portfolioSize = await parsePortfolioSize(lastUserMessage) || 0;
 
     const isQualified = portfolioSize >= 50000;
 
     if (isQualified) {
-        // --- START NEW LOGIC ---
-        // 1. Generate a contextual acknowledgement of the user's pain point.
+        // 1. Generate a contextual acknowledgement of the user's portfolio size.
         const ackPrompt = ChatPromptTemplate.fromMessages([
-            ["system", `${LUKE_PERSONA}
+            ["system", `${getGenderAwarePersona(state.gender)}
 
-The user just told you their biggest challenge is: "${lastUserMessage}"
+The user just told you their portfolio size is: "${lastUserMessage}"
 
-Your task is to provide a brief, one-line acknowledgement that sounds natural and empathetic. This is just a bridge before you offer to book a call.
+Your task is to provide a brief, one-line acknowledgement that sounds natural and positive. This is just a bridge before you offer to book a call.
 
 Examples:
-- User challenge: "finding good projects"
-- Your response: "I get that bro, it's tough to cut through the noise."
+- User says: "60k"
+- Your response: "solid, that's a great spot to be working with."
 
-- User challenge: "knowing when to sell"
-- Your response: "For sure, that's a classic struggle for a lot of investors."
+- User says: "about 100k"
+- Your response: "nice! that's a solid foundation."
 
-- User challenge: "scaling"
-- Your response: "Makes sense, scaling up comes with its own set of challenges."
+- User says: "around 200k"
+- Your response: "appreciate it, that's a great position to be in."
 
 Generate only the single line of acknowledgement.`],
         ]);
@@ -591,10 +727,10 @@ Generate only the single line of acknowledgement.`],
                     hour12: true 
                 })
             );
-            bookingMessage = `let's go! you sound like a perfect fit. let's get you booked in for a call with the team. Here are some available times:\n\n- ${availableSlots.join('\n- ')}\n\nLet me know which one works for you.`;
+            bookingMessage = `based on what you've shared, I think BMB could really help with those challenges. we've built risk management software that helps us outperform typical buy and hold strategies.\n\nwant to hop on a quick call with the team? here are some available times:\n\n- ${availableSlots.join('\n- ')}\n\nwhich one works for you?`;
         } catch (error) {
-            console.error('Error fetching slots in q3MainLogic:', error);
-            bookingMessage = `let's go! you sound like a perfect fit. let's get you booked in for a call with the team. I'll send you the booking link directly.`;
+            console.error('Error fetching slots in q2MainLogic:', error);
+            bookingMessage = `based on what you've shared, I think BMB could really help with those challenges. we've built risk management software that helps us outperform typical buy and hold strategies.\n\nwant to hop on a quick call with the team? I'll send you the booking link directly.`;
         }
 
         // 3. Combine them into a multi-part response.
@@ -695,7 +831,7 @@ export async function collectEmailNode(state: GraphStateType, lastUserMessage: s
     }
 
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${LUKE_PERSONA}
+        ["system", `${getGenderAwarePersona(state.gender)}
 
 The user was offered several booking times and responded with: "${lastUserMessage}"
 You've determined this corresponds to the specific time: "${resolvedTime}"
@@ -755,7 +891,7 @@ export async function bookingConfirmationNode(state: GraphStateType, lastUserMes
     console.log('=====================================');
     
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${LUKE_PERSONA}
+        ["system", `${getGenderAwarePersona(state.gender)}
 
 The user just provided their email for the booking: "${userEmail}"
 
@@ -977,7 +1113,7 @@ export async function nurtureFollowUpRepromptNode(state: GraphStateType, lastUse
     if (isQualified) {
         // 1. Generate a contextual acknowledgement of the user's portfolio size.
         const ackPrompt = ChatPromptTemplate.fromMessages([
-            ["system", `${LUKE_PERSONA}
+            ["system", `${getGenderAwarePersona(state.gender)}
 
 You previously checked in with this user. They just told you their portfolio size is: "${portfolioSizeRaw}"
 
