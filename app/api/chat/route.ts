@@ -75,6 +75,9 @@ export async function POST(req: NextRequest) {
       location: state.location,
       response: state.response || '',
       availableSlots: state.availableSlots || [],
+      gender: state.gender,
+      instagramUsername: state.instagramUsername,
+      conversationId: state.conversationId,
     };
     
     console.log('Initial state:', JSON.stringify(initialState, null, 2));

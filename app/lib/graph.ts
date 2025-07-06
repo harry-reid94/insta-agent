@@ -77,6 +77,14 @@ export const GraphState = Annotation.Root({
   gender: Annotation<string | undefined>({
     reducer: (x: string | undefined, y: string | undefined) => y,
     default: () => undefined
+  }),
+  instagramUsername: Annotation<string | undefined>({
+    reducer: (x: string | undefined, y: string | undefined) => y,
+    default: () => undefined
+  }),
+  conversationId: Annotation<string | undefined>({
+    reducer: (x: string | undefined, y: string | undefined) => y,
+    default: () => undefined
   })
 });
 

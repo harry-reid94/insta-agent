@@ -1,5 +1,41 @@
+import { ghlService, isGHLConfigured } from './integrations/gohighlevel';
+
 export const availabilityService = {
   getAvailableSlots: async (): Promise<Date[]> => {
+    // Check if GHL is configured
+    if (isGHLConfigured() && process.env.GHL_CALENDAR_ID) {
+      try {
+        // Get slots for the next 7 days
+        const startDate = new Date();
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + 7);
+        
+        // Fetch available slots from GoHighLevel
+        const ghlSlots = await ghlService.getAvailableSlots(
+          process.env.GHL_CALENDAR_ID,
+          startDate.toISOString().split('T')[0],
+          endDate.toISOString().split('T')[0]
+        );
+        
+        // Convert GHL slots to Date objects and return first 3
+        const availableSlots = ghlSlots
+          .filter(slot => slot.available)
+          .map(slot => new Date(slot.startTime))
+          .slice(0, 3);
+        
+        if (availableSlots.length > 0) {
+          console.log('✅ Retrieved', availableSlots.length, 'slots from GoHighLevel');
+          return availableSlots;
+        }
+        
+        console.log('⚠️  No available slots from GHL, using fallback');
+      } catch (error) {
+        console.error('Error fetching GHL calendar slots:', error);
+        console.log('⚠️  Falling back to dummy slots');
+      }
+    }
+    
+    // Fallback: Generate dummy slots for testing
     const slots: Date[] = [];
     const now = new Date();
     let current = new Date(now.getTime());
@@ -28,4 +64,19 @@ export const availabilityService = {
     }
     return slots;
   },
-}; 
+  
+  // Helper to format slots for display
+  formatSlotsForDisplay: (slots: Date[]): string[] => {
+    return slots.map(slot => {
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      };
+      return slot.toLocaleString('en-US', options);
+    });
+  }
+};

@@ -5,6 +5,8 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const body = await req.json();
+    const gender = body.gender;
     const conversationId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const initialState: typeof GraphState.State = {
       messages: [],
@@ -17,6 +19,7 @@ export async function POST(req: NextRequest) {
       location: undefined,
       response: '',
       availableSlots: [],
+      gender: gender,
     };
     
     const result = await graph.invoke(initialState);
@@ -32,7 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Failed to initialize conversation',
-        response: "My bad bro, having some technical issues. Let's try again in a bit.",
+        response: "My bad, having some technical issues. Let's try again in a bit.",
       },
       { status: 500 }
     );

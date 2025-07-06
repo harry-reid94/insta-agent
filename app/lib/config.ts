@@ -111,8 +111,6 @@ export const defaultConfig: AgentConfig = {
     'unfortunately',
     'regret',
     'bad news',
-    'instagram',
-    'ig',
     'social media',
     'handle',
     'follow'

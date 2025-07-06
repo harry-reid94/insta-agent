@@ -1,8 +1,11 @@
 import axios from 'axios';
 
-// Temporarily using dummy values
-const dummyApiKey = 'dummy_api_key';
-const dummyLocationId = 'dummy_location_id';
+// Get configuration from environment variables
+const API_KEY = process.env.GHL_API_KEY || '';
+const LOCATION_ID = process.env.GHL_LOCATION_ID || '';
+const PIPELINE_ID = process.env.GHL_PIPELINE_ID || '';
+const INITIAL_STAGE_ID = process.env.GHL_INITIAL_STAGE_ID || '';
+const CALENDAR_ID = process.env.GHL_CALENDAR_ID || '';
 
 export interface GHLContact {
   id?: string;
@@ -50,11 +53,16 @@ export class GoHighLevelService {
   private locationId: string;
 
   constructor(
-    apiKey: string = dummyApiKey,
-    locationId: string = dummyLocationId
+    apiKey: string = API_KEY,
+    locationId: string = LOCATION_ID
   ) {
     this.apiKey = apiKey;
     this.locationId = locationId;
+    
+    // Warn if credentials are missing
+    if (!this.apiKey || !this.locationId) {
+      console.warn('⚠️  GoHighLevel credentials not configured. Please set GHL_API_KEY and GHL_LOCATION_ID in your .env.local file.');
+    }
   }
 
   private getHeaders() {
@@ -189,6 +197,81 @@ export class GoHighLevelService {
     }
   }
 
+  // Create appointment from selected time string
+  async createAppointmentFromTimeString(
+    contactId: string,
+    calendarId: string,
+    selectedTime: string,
+    email: string
+  ): Promise<GHLBooking | null> {
+    try {
+      // Parse the selected time (e.g., "Tuesday 10am", "tomorrow at 2pm")
+      const appointmentDate = this.parseTimeString(selectedTime);
+      if (!appointmentDate) {
+        console.error('Could not parse time string:', selectedTime);
+        return null;
+      }
+
+      const booking = await this.createBooking({
+        contactId,
+        calendarId,
+        appointmentDate: appointmentDate.toISOString().split('T')[0],
+        appointmentTime: appointmentDate.toISOString().split('T')[1].substring(0, 5),
+        status: 'scheduled'
+      });
+
+      // Send confirmation email would happen here via GHL automation
+      console.log(`✅ Appointment booked for ${email} on ${appointmentDate.toLocaleString()}`);
+      
+      return booking;
+    } catch (error) {
+      console.error('Error creating appointment:', error);
+      return null;
+    }
+  }
+
+  // Parse time strings like "Tuesday 10am", "tomorrow at 2pm" into Date objects
+  private parseTimeString(timeString: string): Date | null {
+    const now = new Date();
+    const lowerTime = timeString.toLowerCase();
+    
+    // Extract time (10am, 2pm, etc.)
+    const timeMatch = lowerTime.match(/(\d{1,2})(:\d{2})?(\s)?(am|pm)/i);
+    if (!timeMatch) return null;
+    
+    let hour = parseInt(timeMatch[1]);
+    const isPM = timeMatch[4].toLowerCase() === 'pm';
+    
+    if (isPM && hour < 12) hour += 12;
+    if (!isPM && hour === 12) hour = 0;
+    
+    const result = new Date();
+    result.setHours(hour, 0, 0, 0);
+    
+    // Handle day references
+    if (lowerTime.includes('tomorrow')) {
+      result.setDate(result.getDate() + 1);
+    } else if (lowerTime.includes('monday')) {
+      this.setToNextWeekday(result, 1);
+    } else if (lowerTime.includes('tuesday')) {
+      this.setToNextWeekday(result, 2);
+    } else if (lowerTime.includes('wednesday')) {
+      this.setToNextWeekday(result, 3);
+    } else if (lowerTime.includes('thursday')) {
+      this.setToNextWeekday(result, 4);
+    } else if (lowerTime.includes('friday')) {
+      this.setToNextWeekday(result, 5);
+    }
+    
+    return result;
+  }
+
+  private setToNextWeekday(date: Date, targetDay: number): void {
+    const currentDay = date.getDay();
+    const daysUntilTarget = (targetDay - currentDay + 7) % 7 || 7;
+    date.setDate(date.getDate() + daysUntilTarget);
+  }
+
   // Generate booking link for a calendar
   async generateBookingLink(calendarId: string, contactId?: string): Promise<string> {
     try {
@@ -250,8 +333,8 @@ export class GoHighLevelService {
       // Create opportunity
       const opportunity = await this.createOpportunity({
         contactId: contact.id!,
-        pipelineId: process.env.GHL_PIPELINE_ID || '',
-        stageId: process.env.GHL_INITIAL_STAGE_ID || '',
+        pipelineId: PIPELINE_ID,
+        stageId: INITIAL_STAGE_ID,
         name: `${firstName} - BMB Consultation`,
         monetaryValue: this.estimateOpportunityValue(portfolioSize),
         status: 'open',
@@ -265,13 +348,65 @@ export class GoHighLevelService {
 
       // Generate booking link
       const bookingLink = await this.generateBookingLink(
-        process.env.GHL_CALENDAR_ID || '',
+        CALENDAR_ID,
         contact.id
       );
 
       return { contact, opportunity, bookingLink };
     } catch (error) {
       console.error('Error creating qualified lead:', error);
+      throw error;
+    }
+  }
+
+  // Create a complete qualified lead workflow with appointment
+  async createQualifiedLeadWithAppointment(
+    firstName: string,
+    lastName: string,
+    email: string,
+    instagramUsername: string,
+    portfolioSize: number,
+    painPoints: string,
+    bmbUnderstanding: string,
+    selectedTime: string,
+    source: string = 'Instagram DM'
+  ): Promise<{ 
+    contact: GHLContact; 
+    opportunity: GHLOpportunity; 
+    bookingLink: string;
+    appointment: GHLBooking | null;
+  }> {
+    try {
+      // First create the qualified lead
+      const leadResult = await this.createQualifiedLead(
+        firstName,
+        lastName,
+        instagramUsername,
+        portfolioSize,
+        painPoints,
+        bmbUnderstanding,
+        source
+      );
+
+      // Update contact with email
+      if (email && leadResult.contact.id) {
+        await this.updateContact(leadResult.contact.id, { email });
+      }
+
+      // Create the appointment
+      let appointment = null;
+      if (selectedTime && leadResult.contact.id) {
+        appointment = await this.createAppointmentFromTimeString(
+          leadResult.contact.id,
+          CALENDAR_ID,
+          selectedTime,
+          email
+        );
+      }
+
+      return { ...leadResult, appointment };
+    } catch (error) {
+      console.error('Error creating qualified lead with appointment:', error);
       throw error;
     }
   }
@@ -287,5 +422,10 @@ export class GoHighLevelService {
   }
 }
 
-// Initialize with dummy values for now
-export const ghlService = new GoHighLevelService(); 
+// Initialize with environment variables
+export const ghlService = new GoHighLevelService();
+
+// Helper function to check if GHL is properly configured
+export function isGHLConfigured(): boolean {
+  return !!(API_KEY && LOCATION_ID && PIPELINE_ID && INITIAL_STAGE_ID && CALENDAR_ID);
+} 

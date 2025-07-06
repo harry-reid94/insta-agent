@@ -5,12 +5,12 @@ import { greetingNode } from '../../../lib/stages';
 
 export const runtime = 'nodejs';
 
-async function getInitialMessage() {
+async function getInitialMessage(gender?: string) {
   const conversationId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  const thanksMessage = "Hey man, thanks for the follow!";
+  const thanksMessage = gender === 'male' ? "Hey man, thanks for the follow!" : "Hey, thanks for the follow!";
   
   // Get the standard greeting
-  const greetingResult = await greetingNode({} as any, { noGreetingWord: true });
+  const greetingResult = await greetingNode({ gender } as any, { noGreetingWord: true });
   const greetingMessage = greetingResult.response;
 
   const combinedMessage = `${thanksMessage}\n\n${greetingMessage}`;
@@ -29,6 +29,7 @@ async function getInitialMessage() {
     location: undefined,
     response: combinedMessage,
     availableSlots: [],
+    gender: gender,
   };
 
   return {
@@ -40,7 +41,9 @@ async function getInitialMessage() {
 
 export async function POST(req: NextRequest) {
   try {
-    const data = await getInitialMessage();
+    const body = await req.json();
+    const gender = body.gender;
+    const data = await getInitialMessage(gender);
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error in new-follower trigger:', error);

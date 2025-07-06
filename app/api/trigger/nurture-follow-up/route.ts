@@ -6,8 +6,12 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const body = await req.json();
+    const gender = body.gender;
     const conversationId = 'canned-nurture-123'; // Hardcode for simulation
-    const followUpContent = "hey brother just checking in to see how your portfolio is coming along";
+    const followUpContent = gender === 'male' 
+      ? "hey brother just checking in to see how your portfolio is coming along"
+      : "hey just checking in to see how your portfolio is coming along";
     
     // The full message history for the UI
     const finalUiMessages = [
@@ -29,6 +33,7 @@ export async function POST(req: NextRequest) {
       lastQuestionAsked: followUpContent,
       response: followUpContent,
       isQualified: undefined,
+      gender: gender,
     };
 
     return NextResponse.json({ 
@@ -42,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Failed to initialize conversation',
-        response: "My bad bro, having some technical issues. Let's try again in a bit.",
+        response: "My bad, having some technical issues. Let's try again in a bit.",
       },
       { status: 500 }
     );

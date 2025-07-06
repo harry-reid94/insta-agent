@@ -31,6 +31,7 @@ interface ConversationState {
     repromptAttempts: Record<string, number>;
     location?: string;
     response: string;
+    gender?: string;
 }
 
 interface ChatResponse {
@@ -84,6 +85,7 @@ export default function Chat() {
   const [state, setState] = useState<ConversationState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [selectedGender, setSelectedGender] = useState<'male' | 'female' | 'unknown'>('unknown');
 
   const handleTrigger = async (triggerApi: string) => {
     try {
@@ -92,6 +94,7 @@ export default function Chat() {
       const response = await fetch(triggerApi, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gender: selectedGender }),
       });
 
       if (!response.ok) throw new Error(`Failed to trigger: ${triggerApi}`);
@@ -153,7 +156,7 @@ export default function Chat() {
             type: m.role === 'user' ? 'human' : 'ai',
             content: m.content
           })), 
-          state,
+          state: { ...state, gender: selectedGender },
           conversationId,
         }),
       });
@@ -206,6 +209,20 @@ export default function Chat() {
       <div className="flex h-screen items-center justify-center">
         <div className="flex flex-col space-y-4">
           <h1 className="text-2xl font-bold text-center">Simulate a Trigger</h1>
+          
+          <div className="flex flex-col space-y-2">
+            <label className="text-sm font-medium text-gray-700">Select Gender for Testing:</label>
+            <select
+              value={selectedGender}
+              onChange={(e) => setSelectedGender(e.target.value as 'male' | 'female' | 'unknown')}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="unknown">Unknown</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+          
           <button
             onClick={() => handleTrigger('/api/trigger/new-follower')}
             disabled={isLoading}
@@ -245,6 +262,7 @@ export default function Chat() {
           </span>
         </div>
         <div>Location: <span className="font-semibold">{state?.location || 'Not Set'}</span></div>
+        <div>Gender: <span className="font-semibold">{selectedGender}</span></div>
         <div>Current Q: <span className="font-semibold">{state?.currentQuestionId || 'None'}</span></div>
         <div>Last Asked: <span className="font-semibold">{state?.lastQuestionAsked || 'None'}</span></div>
         <div>

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseService } from '../../lib/integrations/supabase';
-import { instagramService } from '../../lib/integrations/instagram';
 import { graph, GraphState } from '../../lib/graph';
 import { HumanMessage } from '@langchain/core/messages';
 
@@ -44,55 +43,39 @@ export async function POST(req: NextRequest) {
     const result = await graph.invoke(graphState);
     
     if (result.response) {
-      // Get user info for personalization
-      try {
-        const userInfo = await instagramService.getUserInfo(conversationState.instagram_user_id);
-        const firstName = instagramService.extractFirstName(userInfo);
-        
-        // Personalize the response
-        const personalizedResponse = result.response.replace('{FirstName}', firstName);
-        
-        // Send message via Instagram
-        await instagramService.sendConversationResponse(conversationId, personalizedResponse);
-        
-        // Log the manual trigger
-        await supabaseService.logMessage({
-          instagram_user_id: conversationState.instagram_user_id,
-          instagram_username: lead.instagram_username || 'unknown',
-          conversation_id: conversationId,
-          stage: 'manual_trigger',
-          message_from: 'agent',
-          message_content: personalizedResponse,
-          timestamp: new Date().toISOString(),
-          metadata: { triggered_manually: true }
-        });
-        
-        // Update conversation state
-        await supabaseService.saveConversationState({
-          conversation_id: conversationId,
-          instagram_user_id: conversationState.instagram_user_id,
-          current_stage: result.stage || 'greeting',
-          answers: result.answers || conversationState.answers,
-          last_question_asked: result.lastQuestionAsked,
-          is_qualified: result.isQualified,
-          is_specific: false,
-          location: result.location || conversationState.location,
-          reprompt_attempts: result.repromptAttempts || {}
-        });
+      // Use the response directly without Instagram personalization
+      const response = result.response;
+      
+      // Log the manual trigger
+      await supabaseService.logMessage({
+        instagram_user_id: conversationState.instagram_user_id,
+        instagram_username: lead.instagram_username || 'unknown',
+        conversation_id: conversationId,
+        stage: 'manual_trigger',
+        message_from: 'agent',
+        message_content: response,
+        timestamp: new Date().toISOString(),
+        metadata: { triggered_manually: true }
+      });
+      
+      // Update conversation state
+      await supabaseService.saveConversationState({
+        conversation_id: conversationId,
+        instagram_user_id: conversationState.instagram_user_id,
+        current_stage: result.stage || 'greeting',
+        answers: result.answers || conversationState.answers,
+        last_question_asked: result.lastQuestionAsked,
+        is_qualified: result.isQualified,
+        is_specific: false,
+        location: result.location || conversationState.location,
+        reprompt_attempts: result.repromptAttempts || {}
+      });
 
-        return NextResponse.json({ 
-          success: true, 
-          message: 'AI workflow triggered successfully',
-          response: personalizedResponse
-        });
-      } catch (error) {
-        console.error('Error sending Instagram message:', error);
-        return NextResponse.json({ 
-          success: true, 
-          message: 'AI workflow triggered but failed to send Instagram message',
-          error: error 
-        }, { status: 200 });
-      }
+      return NextResponse.json({ 
+        success: true, 
+        message: 'AI workflow triggered successfully',
+        response: response
+      });
     }
 
     return NextResponse.json({ 
