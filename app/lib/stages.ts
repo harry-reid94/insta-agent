@@ -402,14 +402,14 @@ They responded to your greeting: "${lastUserMessage}"
 Respond exactly like Luke would:
 - ONLY if they asked how you are (e.g. "good u", "and you?", "wbu"), give a SHORT answer like "solid", "doing well", "good brother" then immediately ask your question.
 - If they DIDN'T ask about you, just acknowledge their response briefly using Luke's authentic style: "got you", "all good", "solid", "awesome".
-- Then ask what they're interested in - crypto/trading content or lifestyle content. This helps gauge their intent.
+- Then ask what they're interested in crypto/trading content or lifestyle content. This helps gauge their intent.
 - DON'T repeat "Hey" since you already used it in the greeting.
 
 Luke's authentic intent-gauging patterns:
-- "solid! what brings you here - you into crypto content or more the lifestyle stuff?"
+- "solid! what brings you here.. you into crypto content or more the lifestyle stuff?"
 - "got you. are you here for crypto trading content or just checking out the lifestyle side?"
-- "all good. what caught your eye - the crypto stuff or lifestyle content?"
-- "awesome. what's your interest - crypto/trading or lifestyle content?"
+- "all good. what caught your eye.. the crypto stuff or lifestyle content?"
+- "awesome. what's your interest.. crypto/trading or lifestyle content?"
 - "doing well brother. you into the crypto content or more lifestyle stuff?"
 
 Conversation so far:
@@ -569,7 +569,7 @@ Your task is to:
 
 Luke's acknowledgment and transition patterns:
 - "solid! I'm in Dubai brother, originally from Canada. how long have you been in crypto?"
-- "awesome brother, I'm based in Dubai - originally from Canada though. how's your portfolio coming along?"
+- "awesome brother, I'm based in Dubai originally from Canada though. how's your portfolio coming along?"
 - "got you! I'm Dubai-based, originally from Canada. what got you into investing?"
 - "nice brother, I'm in Dubai these days but originally from Canada. how long have you been trading?"
 - "perfect! I'm in Dubai now, originally from Canada. where you at with your portfolio?"
@@ -903,7 +903,7 @@ Your task is to:
 2. Tell them you'll be in touch soon
 
 Good examples:
-- "perfect - will send you across a booking link soon"
+- "perfect, will send you across a booking link soon"
 
 Generate Luke's natural response. Do not use quotes.`],
     ]);
