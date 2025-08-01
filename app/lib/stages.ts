@@ -34,7 +34,7 @@ Output only the location.`],
 
 async function extractIntent(userResponse: string): Promise<string> {
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `You are an intent classifier. Your task is to determine what the user is primarily interested in based on their response to: "what brings you here - you into crypto content or more the lifestyle stuff?"
+        ["system", `You are an intent classifier. Your task is to determine what the user is primarily interested in based on their response to: "what brings you here.. you into crypto content or more the lifestyle stuff?"
 
 Analyze the user's response and classify it into one of these three categories:
 
