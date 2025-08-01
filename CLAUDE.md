@@ -35,6 +35,7 @@ npm run list-jobs  # Check fine-tuning status
 
 # Test integrations
 curl http://localhost:3000/api/test-ghl        # Test GHL API connectivity
+curl http://localhost:3000/api/test-ghl-webhook # View GHL webhook test instructions
 curl http://localhost:3000/api/test-instagram  # Test Instagram API connectivity
 
 # Test webhook locally with ngrok
@@ -49,16 +50,17 @@ Create a `.env.local` file with required variables:
 # OpenAI
 OPENAI_API_KEY=your_openai_api_key
 
-# ManyChat
-MANYCHAT_WEBHOOK_SECRET=your_secure_webhook_secret
-MANYCHAT_API_TOKEN=your_manychat_api_token  # Optional for advanced features
-
-# GoHighLevel
+# GoHighLevel (Primary Integration)
 GHL_API_KEY=your_ghl_api_key
 GHL_LOCATION_ID=your_location_id
 GHL_PIPELINE_ID=your_pipeline_id
 GHL_INITIAL_STAGE_ID=your_stage_id
 GHL_CALENDAR_ID=your_calendar_id
+GHL_WEBHOOK_SECRET=your_secure_webhook_secret  # Optional but recommended
+
+# ManyChat (Legacy - being replaced by GoHighLevel)
+MANYCHAT_WEBHOOK_SECRET=your_secure_webhook_secret
+MANYCHAT_API_TOKEN=your_manychat_api_token  # Optional for advanced features
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
@@ -76,8 +78,8 @@ This is an Instagram DM automation agent that qualifies leads for BullMarketBlue
 - **Framework**: Next.js 15.3.3 with App Router, React 19, TypeScript
 - **AI/LLM**: OpenAI API (GPT-4o-mini), LangChain, LangGraph for state management
 - **Database**: Supabase for conversation logs and lead tracking
-- **Messaging Platform**: ManyChat via External Requests (handles Instagram integration)
-- **CRM Integration**: GoHighLevel for qualified leads
+- **Messaging & CRM Platform**: GoHighLevel (handles Instagram DMs and lead management)
+- **Legacy Integration**: ManyChat support (being phased out)
 
 ### Key Architecture Components
 
@@ -93,13 +95,15 @@ This is an Instagram DM automation agent that qualifies leads for BullMarketBlue
    - Gender-aware communication adaptation
 
 3. **Integration Layer** (`/app/lib/integrations/`)
-   - ManyChat: Webhook processing and response formatting
-   - GoHighLevel: CRM integration for qualified leads
+   - GoHighLevel: Webhook processing, CRM integration, and lead management
+   - ManyChat: Legacy webhook processing (being phased out)
    - Supabase: Persistent storage for conversations and leads
 
 4. **API Routes** (`/app/api/`)
-   - `/manychat/webhook` - Receives ManyChat External Requests
+   - `/gohighlevel/webhook` - Receives GoHighLevel Instagram DM webhooks
+   - `/manychat/webhook` - Legacy ManyChat External Requests
    - `/chat` - Development chat interface
+   - `/test-ghl-webhook` - Test endpoint with curl examples
    - `/manual-trigger` - Manual conversation initiation
    - `/human-takeover` - Human override functionality
 
@@ -113,25 +117,46 @@ This is an Instagram DM automation agent that qualifies leads for BullMarketBlue
 
 ### Conversation Flow
 
-1. **Entry**: User messages Instagram → ManyChat External Request triggered
+1. **Entry**: User messages Instagram → GoHighLevel webhook triggered
 2. **Processing**: LangGraph determines stage → Calls appropriate handler
-3. **Response**: Handler generates JSON response → ManyChat sends to user
+3. **Response**: Handler generates JSON response → GoHighLevel sends to user
 4. **Qualification**: Portfolio ≥ $50k → Book call; < $50k → Send nurture content
-5. **Actions**: ManyChat applies tags, sets custom fields, triggers sequences
+5. **Actions**: GoHighLevel updates contact tags, custom fields, and pipeline status
 6. **Persistence**: All interactions logged to Supabase
 
 ### Development Considerations
 
 - No test suite exists - be careful with modifications
-- Use console logs to debug booking flows (dummy integrations in place)
+- Use console logs to debug booking flows
 - Check `/data/training_data.jsonl` for conversation examples
 - Review `LUKE_STYLE_ANALYSIS.md` for communication style guidelines
 - LangGraph configuration in `langgraph.json` specifies Node.js v20
-- See `docs/MANYCHAT_SETUP.md` and `docs/MANYCHAT_FLOW_SETUP.md` for ManyChat configuration
+- Legacy ManyChat docs in `docs/MANYCHAT_SETUP.md` (for reference)
 
 When modifying conversation logic, ensure you:
 1. Maintain Luke's casual, encouraging communication style
 2. Preserve the qualification threshold logic
-3. Test responses work with ManyChat External Request format
-4. Verify ManyChat actions (tags, custom fields) are properly returned
+3. Test responses work with GoHighLevel webhook format
+4. Verify GoHighLevel contact updates (tags, custom fields) are properly formatted
 5. Check human override triggers aren't too sensitive
+
+### GoHighLevel Webhook Setup
+
+1. **Create Webhook in GoHighLevel**:
+   - Navigate to Settings → Webhooks
+   - Create new webhook with URL: `https://your-domain.com/api/gohighlevel/webhook`
+   - Add Authorization header: `Bearer YOUR_GHL_WEBHOOK_SECRET`
+   - Select Instagram DM events
+
+2. **Configure Custom Fields**:
+   - `stage` (text) - Current conversation stage
+   - `is_qualified` (text/boolean) - Qualification status
+   - `portfolio_size` (number) - Investment amount
+   - `bmb_understanding` (text) - Understanding of BMB
+   - `pain_points` (text) - Investment challenges
+   - `answers` (text/JSON) - Full conversation data
+
+3. **Test Integration**:
+   - Use `/api/test-ghl-webhook` endpoint for curl examples
+   - Monitor console logs for webhook processing
+   - Check GoHighLevel contact updates after each message

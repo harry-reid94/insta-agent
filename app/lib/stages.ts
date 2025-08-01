@@ -1,7 +1,7 @@
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
-import { model, LUKE_PERSONA, getGenderAwarePersona } from './shared';
+import { model, LUKE_PERSONA, getGenderAwarePersona, analyticalModel } from './shared';
 import { GraphStateType } from './graph';
 import { ConversationStage } from './types';
 import { parsePortfolioSize } from './config';
@@ -30,6 +30,63 @@ Output only the location.`],
     const result = await chain.invoke({});
 
     return result.trim();
+}
+
+async function extractIntent(userResponse: string): Promise<string> {
+    const prompt = ChatPromptTemplate.fromMessages([
+        ["system", `You are an intent classifier. Your task is to determine what the user is primarily interested in based on their response to: "what brings you here - you into crypto content or more the lifestyle stuff?"
+
+Analyze the user's response and classify it into one of these three categories:
+
+1. "crypto" - If they mention:
+   - Cryptocurrency, Bitcoin, Ethereum, altcoins, DeFi
+   - Trading, investing, portfolio management
+   - Market analysis, technical analysis
+   - Blockchain, Web3, NFTs
+   - Financial strategies, risk management
+   - Any trading-related terms
+   - BOTH interests (e.g., "both", "everything", "both crypto and lifestyle")
+   - Mixed interests that include crypto
+
+2. "lifestyle" - If they mention ONLY:
+   - Lifestyle content, personal development
+   - Travel, Dubai experiences, luxury
+   - Motivation, mindset, personal growth
+   - Life experiences, entrepreneurship outside trading
+   - General lifestyle inspiration
+   - AND do not mention crypto/trading interests
+
+3. "other" - If their response is:
+   - Completely vague or unclear (e.g., "just checking things out", "not sure")
+   - Off-topic or unrelated
+   - Doesn't indicate any clear preference
+
+IMPORTANT: If they mention "both" or show interest in both crypto and lifestyle, classify as "crypto".
+
+Examples:
+- "Crypto mostly" → crypto
+- "Trading and investing" → crypto  
+- "Both really" → crypto
+- "Both crypto and lifestyle" → crypto
+- "Everything" → crypto
+- "Lifestyle stuff" → lifestyle
+- "Travel content" → lifestyle
+- "Just browsing" → other
+- "Not sure yet" → other
+
+User response: "${userResponse}"
+
+Output only one word: crypto, lifestyle, or other`],
+    ]);
+
+    const chain = prompt.pipe(analyticalModel).pipe(new StringOutputParser());
+    const result = await chain.invoke({});
+
+    const intent = result.trim().toLowerCase();
+    if (['crypto', 'lifestyle', 'other'].includes(intent)) {
+        return intent;
+    }
+    return 'other'; // fallback
 }
 
 async function handleUserResponse(
@@ -131,7 +188,7 @@ Provide only the classification and content, separated by a pipe |.`;
         let responseSystemPrompt;
         if (type === 'QUESTION') {
             if (validationType === 'numeric') {
-                responseSystemPrompt = `${getGenderAwarePersona(state.gender)}
+                responseSystemPrompt = `${getGenderAwarePersona(state.gender, state.messages)}
 
 You previously asked for the user's portfolio size: "${lastQuestionAsked}"
 Instead of answering, the user asked their own question: "${content}"
@@ -155,7 +212,7 @@ ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
             } else {
-                responseSystemPrompt = `${getGenderAwarePersona(state.gender)}
+                responseSystemPrompt = `${getGenderAwarePersona(state.gender, state.messages)}
 
 You previously asked: "${lastQuestionAsked}"
 Instead of answering, the user asked their own question: "${content}"
@@ -181,7 +238,7 @@ Generate Luke's natural response without quotes.`;
             }
         } else { // OFF_TOPIC
             if (validationType === 'numeric') {
-                responseSystemPrompt = `${getGenderAwarePersona(state.gender)}
+                responseSystemPrompt = `${getGenderAwarePersona(state.gender, state.messages)}
 
 You previously asked for the user's portfolio size: "${lastQuestionAsked}"
 The user gave an evasive or non-numeric response: "${content}"
@@ -205,7 +262,7 @@ ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
             } else {
-                responseSystemPrompt = `${getGenderAwarePersona(state.gender)}
+                responseSystemPrompt = `${getGenderAwarePersona(state.gender, state.messages)}
 
 You previously asked: "${lastQuestionAsked}"
 The user gave an off-topic or evasive response: "${content}"
@@ -245,7 +302,7 @@ Generate Luke's natural response without quotes.`;
 
 export async function greetingNode(state: GraphStateType, options?: { noGreetingWord?: boolean }) {
     const systemPrompt = options?.noGreetingWord 
-      ? `${getGenderAwarePersona(state.gender)}
+      ? `${getGenderAwarePersona(state.gender, state.messages)}
 
 You've already said hi. Now, ask a follow-up question to get the conversation going.
 
@@ -256,7 +313,7 @@ Choose one of Luke's authentic follow-up questions:
 - "how's your week been?"
 
 Generate just the question - natural and casual like Luke would actually send, without quotes.`
-      : `${getGenderAwarePersona(state.gender)}
+      : `${getGenderAwarePersona(state.gender, state.messages)}
 
 Someone just reached out or followed you. Start the conversation exactly how Luke would - casual and friendly, focusing on getting to know them first rather than pushing BMB.
 
@@ -312,7 +369,7 @@ Provide only the classification and content, separated by a pipe |.`],
     let systemMessage;
 
     if (type === 'QUESTION') {
-        systemMessage = `${getGenderAwarePersona(state.gender)}
+        systemMessage = `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded to your greeting with a question: "${content}"
 
@@ -338,22 +395,22 @@ ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
     } else { // GREETING_RESPONSE
-        systemMessage = `${getGenderAwarePersona(state.gender)}
+        systemMessage = `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded to your greeting: "${lastUserMessage}"
 
 Respond exactly like Luke would:
-- ONLY if they asked how you are (e.g. "good u", "and you?", "wbu"), give a SHORT answer like "solid", "good man", "doing well" then immediately ask your question.
-- If they DIDN'T ask about you, just acknowledge their response briefly using Luke's style (e.g. "nice", "got you", "all good").
+- ONLY if they asked how you are (e.g. "good u", "and you?", "wbu"), give a SHORT answer like "solid", "doing well", "good brother" then immediately ask your question.
+- If they DIDN'T ask about you, just acknowledge their response briefly using Luke's authentic style: "got you", "all good", "solid", "awesome".
 - Then ask what they're interested in - crypto/trading content or lifestyle content. This helps gauge their intent.
 - DON'T repeat "Hey" since you already used it in the greeting.
 
-Luke's intent-gauging question patterns:
-- "nice! what brings you here - you into crypto content or more the lifestyle stuff?"
+Luke's authentic intent-gauging patterns:
+- "solid! what brings you here - you into crypto content or more the lifestyle stuff?"
 - "got you. are you here for crypto trading content or just checking out the lifestyle side?"
 - "all good. what caught your eye - the crypto stuff or lifestyle content?"
 - "awesome. what's your interest - crypto/trading or lifestyle content?"
-- "solid bro. you into the crypto content or more lifestyle stuff?"
+- "doing well brother. you into the crypto content or more lifestyle stuff?"
 
 Conversation so far:
 ${conversationContext}
@@ -377,17 +434,17 @@ Generate Luke's natural response without quotes.`;
 }
 
 export async function rapportBuildingNode(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
-    // Check if they mentioned crypto/trading interest
-    const cryptoInterest = /crypto|trading|bitcoin|blockchain|invest|portfolio|defi|altcoin|eth|btc|degen|bull|bear|market/i.test(lastUserMessage);
-    const lifestyleInterest = /lifestyle|travel|dubai|luxury|life|experiences|personal|motivation|mindset/i.test(lastUserMessage);
+    // Extract intent using LLM
+    const intent = await extractIntent(lastUserMessage);
+    console.log('🎯 Extracted intent:', intent);
     
     // Check if they ask about Luke
     const userAsksBack = /you\?|\band you\b|wbu|what about you/i.test(lastUserMessage);
 
     let systemMessage;
     
-    if (cryptoInterest) {
-        systemMessage = `${getGenderAwarePersona(state.gender)}
+    if (intent === 'crypto') {
+        systemMessage = `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded about their interest with: "${lastUserMessage}" - they seem interested in crypto/trading content.
 
@@ -397,18 +454,18 @@ Your task is to:
 3. Keep it conversational and not pushy.
 
 Luke's acknowledgment and location question patterns:
-- "nice! crypto's been crazy lately. where you based?"
-- "awesome bro, love meeting fellow crypto people. what part of the world you in?"
+- "solid! crypto's been crazy lately. where you based?"
+- "cool bro, love meeting fellow crypto people. what part of the world you in?"
 - "got you! always good to connect with someone in the space. where you located?"
-- "solid man, crypto community is strong. where you based?"
-- "perfect! market's been moving. where you at?"
+- "fair enough, crypto community is strong. where you based?"
+- "nice brother! market's been moving. where you at?"
 
 Conversation so far:
 ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
-    } else if (lifestyleInterest) {
-        systemMessage = `${getGenderAwarePersona(state.gender)}
+    } else if (intent === 'lifestyle') {
+        systemMessage = `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded about their interest with: "${lastUserMessage}" - they seem more interested in lifestyle content.
 
@@ -418,10 +475,10 @@ Your task is to:
 3. Ask where they're based to continue building rapport.
 
 Luke's acknowledgment patterns for lifestyle interest:
-- "nice! always good to connect brother. where you based?"
+- "solid! always good to connect brother. where you based?"
 - "got you. appreciate you checking out the content. what part of the world you in?"
-- "awesome bro! where you located?"
-- "solid man. where you based?"
+- "cool bro! where you located?"
+- "fair enough. where you based?"
 - "all good! love meeting new people. where you at?"
 
 Conversation so far:
@@ -429,10 +486,32 @@ ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
     } else {
-        // Vague or non-specific response
-        systemMessage = `${getGenderAwarePersona(state.gender)}
+        // Lifestyle or "other" intent - end conversation politely
+        if (intent === 'lifestyle') {
+            systemMessage = `${getGenderAwarePersona(state.gender, state.messages)}
 
-They gave a vague response about their interest: "${lastUserMessage}"
+They responded about their interest with: "${lastUserMessage}" - they seem more interested in lifestyle content only.
+
+Your task is to:
+1. Acknowledge their interest naturally and positively.
+2. Thank them for checking out the content.
+3. End the conversation politely since they're not interested in crypto/trading.
+
+Luke's polite ending patterns for lifestyle-only followers:
+- "solid! appreciate you checking out the content brother. enjoy the lifestyle posts!"
+- "got you. thanks for following along with the lifestyle content!"
+- "fair enough! appreciate you being here for the lifestyle side of things."
+- "all good! enjoy the content and thanks for following."
+
+Conversation so far:
+${conversationContext}
+
+Generate Luke's natural response without quotes.`;
+        } else {
+            // Vague, unclear, or "other" intent
+            systemMessage = `${getGenderAwarePersona(state.gender, state.messages)}
+
+They gave a vague or mixed response about their interest: "${lastUserMessage}"
 
 Your task is to:
 1. Acknowledge their response naturally.
@@ -443,12 +522,13 @@ Luke's acknowledgment and location question patterns:
 - "fair enough! where you based?"
 - "got you. what part of the world you in?"
 - "solid. where you located?"
-- "nice! where you based?"
+- "all good! where you based?"
 
 Conversation so far:
 ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
+        }
     }
 
     const prompt = ChatPromptTemplate.fromMessages([
@@ -462,9 +542,10 @@ Generate Luke's natural response without quotes.`;
 
     return {
         response,
-        stage: 'location_response' as ConversationStage,
+        stage: intent === 'lifestyle' ? 'lifestyle_end' as ConversationStage : 'location_response' as ConversationStage,
         location,
         messages: [new AIMessage(response)],
+        answers: { ...state.answers, intent: intent },
         lastQuestionAsked: response
     };
 }
@@ -474,7 +555,7 @@ export async function locationResponseNode(state: GraphStateType, lastUserMessag
 
     let systemMessage;
     if (userAsksBack) {
-        systemMessage = `${getGenderAwarePersona(state.gender)}
+        systemMessage = `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded about location with: "${lastUserMessage}" and asked about you.
 
@@ -487,18 +568,18 @@ Your task is to:
    - Ask about their investing experience: "what got you into investing?"
 
 Luke's acknowledgment and transition patterns:
-- "nice! beautiful spot bro. I'm in Dubai man, originally from Canada. how long have you been in crypto?"
+- "solid! I'm in Dubai brother, originally from Canada. how long have you been in crypto?"
 - "awesome brother, I'm based in Dubai - originally from Canada though. how's your portfolio coming along?"
 - "got you! I'm Dubai-based, originally from Canada. what got you into investing?"
-- "solid man, I'm in Dubai these days but originally from Canada. how long have you been trading?"
-- "perfect brother! I'm in Dubai now, originally from Canada. where you at with your portfolio?"
+- "nice brother, I'm in Dubai these days but originally from Canada. how long have you been trading?"
+- "perfect! I'm in Dubai now, originally from Canada. where you at with your portfolio?"
 
 Conversation so far:
 ${conversationContext}
 
 Generate Luke's natural response without quotes.`;
     } else {
-        systemMessage = `${getGenderAwarePersona(state.gender)}
+        systemMessage = `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded about location with: "${lastUserMessage}". They did NOT ask about your location.
 
@@ -511,10 +592,10 @@ Your task is to:
    - Ask about their investing experience: "what got you into investing?"
 
 Luke's acknowledgment and transition patterns (without mentioning Dubai):
-- "nice! how long have you been in crypto?"
-- "solid. how's your portfolio been performing lately?"
+- "solid! how long have you been in crypto?"
+- "got you. how's your portfolio been performing lately?"
 - "appreciate it! what got you into investing?"
-- "got you. how long have you been trading?"
+- "nice brother. how long have you been trading?"
 
 Conversation so far:
 ${conversationContext}
@@ -542,7 +623,7 @@ Generate Luke's natural response without quotes.`;
 
 export async function cryptoInterestQuestionsNode(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${getGenderAwarePersona(state.gender)}
+        ["system", `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded to your crypto/investing question with: "${lastUserMessage}"
 
@@ -561,7 +642,7 @@ Luke's acknowledgment and question patterns:
 - "nice brother! what's been your biggest challenge so far?"
 - "solid bro. what's been the trickiest part for you?"
 - "got you man. what's been the biggest hurdle?"
-- "awesome! what's your main focus been lately?"
+- "cool! what's your main focus been lately?"
 - "all good brother. what's the biggest challenge you're facing right now?"
 
 Conversation so far:
@@ -588,54 +669,44 @@ async function q1MainLogic(state: GraphStateType, lastUserMessage: string, conve
     const BMB_EXPLANATION = "We've built risk management software that helps us outperform the returns from a typical buy and hold strategy. It's an exclusive group for serious crypto investors looking to build real wealth."
 
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${getGenderAwarePersona(state.gender)}
-
-You can send multiple messages to make the conversation feel more natural. To do this, separate each message with a new line.
-For example:
-"got you brother
-what's the biggest challenge/pain point for you right now when it comes to investing?"
+        ["system", `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded to your question about BMB with: "${lastUserMessage}"
 
 Your task is to:
-1.  Analyze their response to gauge their understanding of BullMarketBlueprint (BMB).
-2.  If their understanding seems low (e.g., they say "not much", "tell me more", "I know nothing"), first give a brief, one-sentence explanation of BMB, and then ask about their portfolio size (Q2).
-    - BMB Explanation: "${BMB_EXPLANATION}"
-3.  If they seem to have some understanding, just acknowledge their answer and ask about their portfolio size (Q2).
-4.  The response should be natural and in Luke's style. You can split it into multiple messages if it feels more natural.
+1. Analyze their response to gauge their understanding of BullMarketBlueprint (BMB).
+2. If their understanding seems low (e.g., they say "not much", "tell me more", "I know nothing"), give a brief explanation of BMB.
+3. Since they're already qualified (portfolio size >= 50k), offer to book a call and ask for their email.
 
-Luke's portfolio size question patterns:
-- "got you. how's your portfolio coming along?"
-- "all good. what you working with portfolio-wise right now?"
-- "no worries bro. what's your portfolio looking like these days?"
-- "okay cool. how's your portfolio sitting right now brother?"
+BMB Explanation: "${BMB_EXPLANATION}"
 
-Example for LOW understanding (split message):
-User: "not much tbh, what is it?"
+Example for LOW understanding:
+User: "not much tbh"
 Luke: "all good bro. ${BMB_EXPLANATION}
-what you working with portfolio-wise right now?"
 
-Example for GOOD understanding (single message):
+based on what you've shared, I think we could really help with those challenges. want to hop on a quick call with the team? what's the best email to send the booking link to?"
+
+Example for GOOD understanding:
 User: "I saw it's a crypto trading group"
-Luke: "nice one man. how's your portfolio coming along? just a rough idea is fine"
+Luke: "nice one! yeah, we're focused on risk management and consistent returns.
+
+based on what you've shared, I think we could really help with those challenges. want to hop on a quick call with the team? what's the best email to send the booking link to?"
 
 Conversation so far:
 ${conversationContext}
 
-Generate Luke's natural response. Do not use quotes. Use new lines to split messages.`],
+Generate Luke's natural response without quotes.`],
     ]);
 
     const chain = prompt.pipe(model).pipe(new StringOutputParser());
-    const responseString = await chain.invoke({});
-    const response = responseString.split('\n');
-    const lastQuestion = response[response.length - 1];
+    const response = await chain.invoke({});
 
     return {
-        response: responseString,
-        stage: 'answering_Q2' as ConversationStage,
-        messages: [new AIMessage(responseString)],
+        response,
+        stage: 'collect_email' as ConversationStage,
+        messages: [new AIMessage(response)],
         answers: { ...state.answers, Q1_bmb_understanding: lastUserMessage },
-        lastQuestionAsked: lastQuestion,
+        lastQuestionAsked: response,
     };
 }
 
@@ -654,7 +725,7 @@ export async function answeringQ2Node(state: GraphStateType, lastUserMessage: st
 async function q3MainLogic(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
     // First, acknowledge their pain points and then ask about portfolio size
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${getGenderAwarePersona(state.gender)}
+        ["system", `${getGenderAwarePersona(state.gender, state.messages)}
 
 They responded to your question about challenges with: "${lastUserMessage}"
 
@@ -697,7 +768,7 @@ async function portfolioSizeMainLogic(state: GraphStateType, lastUserMessage: st
     if (isQualified) {
         // 1. Generate a contextual acknowledgement of the user's portfolio size.
         const ackPrompt = ChatPromptTemplate.fromMessages([
-            ["system", `${getGenderAwarePersona(state.gender)}
+            ["system", `${getGenderAwarePersona(state.gender, state.messages)}
 
 The user just told you their portfolio size is: "${lastUserMessage}"
 
@@ -718,38 +789,19 @@ Generate only the single line of acknowledgement.`],
         const ackChain = ackPrompt.pipe(model).pipe(new StringOutputParser());
         const acknowledgement = await ackChain.invoke({});
 
-        // 2. Fetch available booking slots.
-        let availableSlots: string[] = [];
-        let bookingMessage: string;
-        try {
-            const slots = await availabilityService.getAvailableSlots();
-            availableSlots = slots.map(slot => 
-                slot.toLocaleString('en-US', { 
-                    weekday: 'long', 
-                    month: 'long', 
-                    day: 'numeric', 
-                    hour: 'numeric', 
-                    minute: 'numeric', 
-                    hour12: true 
-                })
-            );
-            bookingMessage = `based on what you've shared, I think BMB could really help with those challenges. we've built risk management software that helps us outperform typical buy and hold strategies.\n\nwant to hop on a quick call with the team? here are some available times:\n\n- ${availableSlots.join('\n- ')}\n\nwhich one works for you?`;
-        } catch (error) {
-            console.error('Error fetching slots in q2MainLogic:', error);
-            bookingMessage = `based on what you've shared, I think BMB could really help with those challenges. we've built risk management software that helps us outperform typical buy and hold strategies.\n\nwant to hop on a quick call with the team? I'll send you the booking link directly.`;
-        }
+        // 2. Ask about BMB understanding first
+        const bmbQuestion = `what do you know about BullMarketBlueprint (BMB)?`;
 
-        // 3. Combine them into a multi-part response.
-        const finalResponse = `${acknowledgement}\n\n${bookingMessage}`;
+        // 3. Combine acknowledgement with BMB question
+        const finalResponse = `${acknowledgement}\n\n${bmbQuestion}`;
 
         return {
             response: finalResponse,
             answers,
             isQualified: true,
-            stage: 'booking' as ConversationStage,
+            stage: 'answering_Q1' as ConversationStage,
             messages: [new AIMessage(finalResponse)],
-            availableSlots,
-            lastQuestionAsked: bookingMessage, // The last question is the request to pick a time.
+            lastQuestionAsked: bmbQuestion,
         };
         // --- END NEW LOGIC ---
     } else {
@@ -818,54 +870,67 @@ Example:
 }
 
 export async function collectEmailNode(state: GraphStateType, lastUserMessage: string, conversationContext: string) {
-    const { availableSlots } = state;
-    const resolvedTime = await resolveBookingTime(lastUserMessage, availableSlots || []);
-
-    if (!resolvedTime) {
-        // If no match is found, ask the user to clarify.
-        const slotList = (availableSlots && availableSlots.length > 0)
-            ? `\n\n- ${availableSlots.join('\n- ')}`
-            : ""; // Don't show slots if they are not available
-        const repromptMessage = `Sorry brother, I didn't quite catch that. Which of these times works for you?${slotList}`;
+    // This node now handles email collection for qualified leads
+    const userInput = lastUserMessage.trim();
+    
+    // Extract email from natural language response
+    const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+    const emailMatch = userInput.match(emailRegex);
+    
+    if (!emailMatch) {
+        const repromptMessage = `that doesn't look like a valid email. can you try again?`;
         return {
             response: repromptMessage,
-            stage: 'booking' as ConversationStage, // Send back to booking to try again
+            stage: 'collect_email' as ConversationStage,
             messages: [new AIMessage(repromptMessage)],
             lastQuestionAsked: repromptMessage,
-            availableSlots,
         };
     }
+    
+    const userEmail = emailMatch[1];
 
+    // Generate booking link
+    const bookingLink = process.env.GHL_BOOKING_LINK || 
+                       `https://app.gohighlevel.com/widget/booking/${process.env.GHL_CALENDAR_ID}`;
+    
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${getGenderAwarePersona(state.gender)}
+        ["system", `${getGenderAwarePersona(state.gender, state.messages)}
 
-The user was offered several booking times and responded with: "${lastUserMessage}"
-You've determined this corresponds to the specific time: "${resolvedTime}"
+The user just provided their email: "${userEmail}"
 
 Your task is to:
-1. Acknowledge their selection naturally. You don't need to repeat the full date and time.
-2. Ask for their email address to send the calendar invite to.
+1. Acknowledge their email address naturally
+2. Tell them you'll be in touch soon
 
-Example:
-User's response: "The 10am slot works"
-Resolved time: "Wednesday, June 25 at 10:00 AM"
-Luke's response: "sounds good brother, got you down for 10am. what's the best email to send the invite to?"
+Good examples:
+- "perfect - will send you across a booking link soon"
 
-Conversation so far:
-${conversationContext}
-
-Generate Luke's natural response without quotes.`],
+Generate Luke's natural response. Do not use quotes.`],
     ]);
+
+// 2. Send them the booking link
+// 3. Tell them to pick a time that works for them
+
+// Example response:
+// "perfect! here's the link to book a time that works for you: [BOOKING_LINK]
+
+// just pick whatever slot fits your schedule best and we'll get everything set up."
+
+// Generate Luke's natural response. Use [BOOKING_LINK] as placeholder for the actual link.`
 
     const chain = prompt.pipe(model).pipe(new StringOutputParser());
     const response = await chain.invoke({});
+    
+    // Replace placeholder with actual booking link
+    const finalResponse = response.replace('[BOOKING_LINK]', bookingLink);
 
     return {
-        response,
-        stage: 'collecting_email' as ConversationStage,
-        messages: [new AIMessage(response)],
-        answers: { ...state.answers, booking_time: resolvedTime },
-        lastQuestionAsked: response
+        response: finalResponse,
+        stage: 'end' as ConversationStage,
+        messages: [new AIMessage(finalResponse)],
+        answers: { ...state.answers, email: userEmail },
+        lastQuestionAsked: finalResponse,
+        isQualified: true
     };
 }
 
@@ -897,7 +962,7 @@ export async function bookingConfirmationNode(state: GraphStateType, lastUserMes
     console.log('=====================================');
     
     const prompt = ChatPromptTemplate.fromMessages([
-        ["system", `${getGenderAwarePersona(state.gender)}
+        ["system", `${getGenderAwarePersona(state.gender, state.messages)}
 
 The user just provided their email for the booking: "${userEmail}"
 
@@ -1023,7 +1088,7 @@ Examples:
 - Your response: "great to hear brother, solid progress."
 
 - User says: "about 75000"
-- Your response: "awesome man, that's a great spot to be in."
+- Your response: "nice man, that's a great spot to be in."
 
 Generate only the single line of acknowledgement.`],
             ]);
@@ -1119,7 +1184,7 @@ export async function nurtureFollowUpRepromptNode(state: GraphStateType, lastUse
     if (isQualified) {
         // 1. Generate a contextual acknowledgement of the user's portfolio size.
         const ackPrompt = ChatPromptTemplate.fromMessages([
-            ["system", `${getGenderAwarePersona(state.gender)}
+            ["system", `${getGenderAwarePersona(state.gender, state.messages)}
 
 You previously checked in with this user. They just told you their portfolio size is: "${portfolioSizeRaw}"
 
@@ -1130,7 +1195,7 @@ Examples:
 - Your response: "great to hear brother, solid progress."
 
 - User says: "about 75000"
-- Your response: "awesome man, that's a great spot to be in."
+- Your response: "nice man, that's a great spot to be in."
 
 Generate only the single line of acknowledgement.`],
         ]);

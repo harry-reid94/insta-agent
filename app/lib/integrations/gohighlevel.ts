@@ -420,10 +420,171 @@ export class GoHighLevelService {
     if (portfolioSize >= 100000) return 2000;   // $100K+ portfolio
     return 1000; // Default for $50K+ portfolio
   }
+
+  // Process incoming GoHighLevel webhook
+  processWebhook(webhookData: GHLWebhookRequest): ProcessedGHLWebhookData | null {
+    try {
+      console.log('📨 Processing GoHighLevel webhook:', JSON.stringify(webhookData, null, 2));
+
+      // Helper function to clean GHL "null" strings
+      const cleanValue = (value: any): any => {
+        if (value === "null" || value === null) return '';
+        return value;
+      };
+
+      // Extract user ID (GHL might use contact_id or user_id)
+      const userId = webhookData.contact_id || webhookData.user_id;
+      const message = cleanValue(webhookData.message || webhookData.text) || '';
+
+      // Validate required fields
+      if (!userId || !message) {
+        console.error('❌ Missing required fields in GoHighLevel webhook');
+        return null;
+      }
+
+      // Extract user info
+      const firstName = cleanValue(webhookData.first_name || 
+                       webhookData.contact?.firstName) || 
+                       'friend';
+      
+      const username = cleanValue(webhookData.instagram_username || 
+                      webhookData.username) || 
+                      `user_${userId.slice(-4)}`;
+
+      // Extract conversation state
+      const stage = cleanValue(webhookData.stage || 
+                   webhookData.custom_fields?.stage) || 
+                   'greeting';
+      
+      const conversationId = cleanValue(webhookData.conversation_id) || 
+                            `${userId}_ghl`;
+
+      // Parse answers from custom fields if stored as JSON
+      let previousAnswers = webhookData.previous_answers || {};
+      
+      // Try to get answers from multiple possible locations
+      const answersField = cleanValue(webhookData.answers) || 
+                          cleanValue(webhookData.custom_fields?.answers);
+      
+      if (answersField && typeof answersField === 'string' && answersField !== '') {
+        try {
+          // Handle double-escaped JSON from GHL
+          let cleanedAnswers = answersField;
+          if (cleanedAnswers.includes('\\"')) {
+            cleanedAnswers = cleanedAnswers.replace(/\\"/g, '"');
+          }
+          previousAnswers = JSON.parse(cleanedAnswers);
+          console.log('✅ GHL Service: Successfully parsed answers:', previousAnswers);
+        } catch (e) {
+          console.warn('Failed to parse answers from webhook data:', e);
+          console.warn('Raw answersField:', answersField);
+        }
+      }
+
+      // Clean custom fields
+      const cleanedCustomFields: Record<string, any> = {};
+      if (webhookData.custom_fields) {
+        Object.entries(webhookData.custom_fields).forEach(([key, value]) => {
+          cleanedCustomFields[key] = cleanValue(value);
+        });
+      }
+
+      const result: ProcessedGHLWebhookData = {
+        userId,
+        username,
+        firstName,
+        message,
+        conversationId,
+        stage: stage && !stage.includes('{{') ? stage : 'greeting',
+        timestamp: webhookData.timestamp || new Date().toISOString(),
+        previousAnswers,
+        customFields: cleanedCustomFields
+      };
+
+      console.log('✅ Processed GoHighLevel webhook from:', result.username);
+      return result;
+
+    } catch (error: any) {
+      console.error('❌ Error processing GoHighLevel webhook:', error.message);
+      return null;
+    }
+  }
+
+  // Verify webhook authentication
+  verifyWebhookAuth(authHeader: string, webhookSecret: string): boolean {
+    if (!webhookSecret) {
+      console.warn('⚠️  GoHighLevel webhook secret not configured, skipping authentication');
+      return true; // Allow in development
+    }
+
+    const expectedAuth = `Bearer ${webhookSecret}`;
+    return authHeader === expectedAuth;
+  }
+
+  // Create response format for GoHighLevel
+  createWebhookResponse(
+    responseText: string,
+    stage: string,
+    isQualified?: boolean,
+    customFields?: Record<string, any>
+  ) {
+    return {
+      message: responseText,
+      stage,
+      is_qualified: isQualified,
+      custom_fields: customFields,
+      contact_update: {
+        custom_fields: customFields
+      }
+    };
+  }
+
+  // Create error response
+  createErrorResponse(message: string) {
+    return {
+      response: message,
+      status: 'error'
+    };
+  }
 }
 
 // Initialize with environment variables
 export const ghlService = new GoHighLevelService();
+
+// Webhook processing interfaces
+export interface GHLWebhookRequest {
+  contact_id?: string;
+  user_id?: string;
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+  instagram_username?: string;
+  message?: string;
+  text?: string;
+  stage?: string;
+  conversation_id?: string;
+  timestamp?: string;
+  previous_answers?: Record<string, any>;
+  custom_fields?: Record<string, any>;
+  contact?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+  };
+}
+
+export interface ProcessedGHLWebhookData {
+  userId: string;
+  username: string;
+  firstName: string;
+  message: string;
+  conversationId: string;
+  stage: string;
+  timestamp: string;
+  previousAnswers?: Record<string, any>;
+  customFields?: Record<string, any>;
+}
 
 // Helper function to check if GHL is properly configured
 export function isGHLConfigured(): boolean {

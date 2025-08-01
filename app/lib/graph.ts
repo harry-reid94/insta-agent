@@ -85,6 +85,10 @@ export const GraphState = Annotation.Root({
   conversationId: Annotation<string | undefined>({
     reducer: (x: string | undefined, y: string | undefined) => y,
     default: () => undefined
+  }),
+  isSpecific: Annotation<boolean | undefined>({
+    reducer: (x: boolean | undefined, y: boolean | undefined) => y,
+    default: () => undefined
   })
 });
 
@@ -141,6 +145,13 @@ async function checkForHighSpecificity(question: string, answer: string): Promis
     const prompt = ChatPromptTemplate.fromMessages([
         ["system", `You are evaluating if a user's response in a financial services conversation requires escalation to a human expert.
 
+This conversation is about BullMarketBlueprint (BMB), a trading/investment service. Common valid responses include:
+- "BMB" (referring to BullMarketBlueprint)
+- Investment amounts, portfolio sizes
+- Trading-related questions
+- Basic scheduling responses
+- Simple personal information
+
 A response requires human attention if it:
 1. Contains complex financial jargon or legal concepts that need expert knowledge
 2. Asks detailed counter-questions requiring specialized expertise
@@ -150,7 +161,10 @@ A response requires human attention if it:
 6. Is exceptionally detailed beyond normal conversation flow
 7. Shows signs of confusion or misunderstanding about the conversation context
 
-However, do NOT flag responses that are simple, direct answers to scheduling questions (e.g., "10am works", "tomorrow at 2pm", "none of those work for me"). These are expected parts of the booking flow.
+However, do NOT flag responses that are:
+- Simple, direct answers to scheduling questions (e.g., "10am works", "tomorrow at 2pm", "none of those work for me")
+- Basic investment-related responses ("BMB", "trading", "portfolio", "investing")
+- Common conversational responses ("good", "thanks", "yes", "no")
 
 Examples that need human attention:
 - "german shepherds at risk of colossal incoherence" (nonsensical)
@@ -183,65 +197,71 @@ async function conversationNode(state: typeof GraphState.State): Promise<Partial
     if (state.messages.length === 0) {
         return greetingNode(state);
     }
+    
+    // If we're at greeting stage with no AI messages, start with greeting
+    if (currentStage === 'greeting' && !state.messages.some(msg => msg instanceof AIMessage)) {
+        console.log('🎯 No AI messages found, generating greeting');
+        return greetingNode(state);
+    }
+    
+    // Debug: Check if we have AI messages when stage is greeting
+    if (currentStage === 'greeting') {
+        const hasAIMessages = state.messages.some(msg => msg instanceof AIMessage);
+        console.log('🔍 Greeting stage debug:', {
+            hasAIMessages,
+            totalMessages: state.messages.length,
+            lastUserMessage: lastUserMessage?.substring(0, 20)
+        });
+    }
 
     // Check for responses that need human attention first
+    let isSpecific: boolean | undefined = undefined;
     if (lastUserMessage) {
         const requiresHuman = await checkForHighSpecificity(state.lastQuestionAsked || '', lastUserMessage);
+        isSpecific = requiresHuman;
         if (requiresHuman) {
             return {
                 stage: 'human_override',
-                isQualified: undefined
+                isQualified: undefined,
+                isSpecific: true
             };
         }
     }
 
     // Dynamic conversation handling based on stage
+    let result: Partial<typeof GraphState.State>;
     if (currentStage === 'greeting') {
-        return askLocationNode(state, lastUserMessage, conversationContext);
+        result = await askLocationNode(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'rapport_building') {
+        result = await rapportBuildingNode(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'location_response') {
+        result = await locationResponseNode(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'crypto_interest_questions') {
+        result = await cryptoInterestQuestionsNode(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'nurture_follow_up') {
+        result = await nurtureFollowUpNode(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'nurture_follow_up_reprompt') {
+        result = await nurtureFollowUpRepromptNode(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'answering_Q1') {
+        result = await answeringQ1Node(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'answering_Q2') {
+        result = await answeringQ2Node(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'answering_Q3') {
+        result = await answeringQ3Node(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'collect_email') {
+        result = await collectEmailNode(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'booking') {
+        result = await collectEmailNode(state, lastUserMessage, conversationContext);
+    } else if (currentStage === 'collecting_email') {
+        result = await bookingConfirmationNode(state, lastUserMessage, conversationContext);
+    } else {
+        result = await defaultConversationNode(state, lastUserMessage, conversationContext);
     }
-
-    if (currentStage === 'rapport_building') {
-        return rapportBuildingNode(state, lastUserMessage, conversationContext);
+    // Attach isSpecific to the result if it was set
+    if (typeof isSpecific !== 'undefined') {
+        result.isSpecific = isSpecific;
     }
-
-    if (currentStage === 'location_response') {
-        return locationResponseNode(state, lastUserMessage, conversationContext);
-    }
-
-    if (currentStage === 'crypto_interest_questions') {
-        return cryptoInterestQuestionsNode(state, lastUserMessage, conversationContext);
-    }
-
-    if (currentStage === 'nurture_follow_up') {
-        return nurtureFollowUpNode(state, lastUserMessage, conversationContext);
-    }
-
-    if (currentStage === 'nurture_follow_up_reprompt') {
-        return nurtureFollowUpRepromptNode(state, lastUserMessage, conversationContext);
-    }
-
-    if (currentStage === 'answering_Q1') {
-        return answeringQ1Node(state, lastUserMessage, conversationContext);
-    }
-
-    if (currentStage === 'answering_Q2') {
-        return answeringQ2Node(state, lastUserMessage, conversationContext);
-    }
-
-    if (currentStage === 'answering_Q3') {
-        return answeringQ3Node(state, lastUserMessage, conversationContext);
-    }
-    
-    if (currentStage === 'booking') {
-        return collectEmailNode(state, lastUserMessage, conversationContext);
-    }
-
-    if (currentStage === 'collecting_email') {
-        return bookingConfirmationNode(state, lastUserMessage, conversationContext);
-    }
-    
-    // Fallback to a default response
-    return defaultConversationNode(state, lastUserMessage, conversationContext);
+    return result;
 }
 
 async function nurtureNode(): Promise<Partial<GraphStateType>> {

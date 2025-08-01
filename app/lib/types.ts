@@ -12,6 +12,7 @@ export type ConversationStage =
   | 'answering_Q2'
   | 'answering_Q3'
   | 'qualified'
+  | 'collect_email'
   | 'booking'
   | 'collecting_email'
   | 'nurture'
